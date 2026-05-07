@@ -1,0 +1,14 @@
+# Dependências
+node_modules/
+
+# Claude Code
+.agent/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,42 @@
+Sabe como é que nasceu o famoso jogo Gorillas do MS-DOS?
+
+A partir de 1991, todas as cópias do MS-DOS (e muitas versões do Windows) incluíam um jogo escondido chamado Gorillas. Inspirou uma geração de programadores e irritou muitos professores de informática. Pensavam que os alunos estavam concentrados quando na realidade estavam a lançar bananas. Mas sabe como é que nasceu o famoso jogo Gorillas do MS-DOS?
+
+Se cresceu com um PC IBM compatível durante o início e meados dos anos 90, é muito provável que tenha visto ou jogado Gorillas. Trata-se de um jogo QBasic gratuito incluído pela primeira vez com o MS-DOS 5.0 em 1991. Foi distribuído com centenas de milhões, se não milhares de milhões, de PCs na década de 1990.
+
+O Gorillas baseia-se numa longa e orgulhosa linhagem de jogos em computadores e consolas de jogos. 
+
+Para jogar, introduz-se duas variáveis: o ângulo da banana e a potência. Também é preciso ter em conta a velocidade do vento, que pode desviar a banana explosiva da sua trajetória.
+
+Assim se o ângulo de lançamento for o correto e atingir o outro gorila com a banana, esta explode. Depois o seu gorila bate no peito para celebrar. Quem já jogou Worms vai ficar imediatamente familiarizado com a mecânica básica dos Gorillas.
+
+Entretanto, com gráficos encantadores (incluindo suporte para CGA e EGA), efeitos sonoros divertidos e uma jogabilidade simples para dois jogadores, o Gorillas reuniu muita jogabilidade atemporal em apenas 1134 linhas de código.
+A Microsoft queria popularizar o MS-DOS 5 e com isto em mente começou a adicionar características muito interessantes ao MS-DOS antes do lançamento.
+
+Havia um utilitário para recuperar arquivos apagados, uma shell gráfica (DOS Shell), um editor de texto em tela cheia (MS-DOS Editor), e um novo interpretador BASIC chamado QBasic.
+
+A sintaxe do QBasic bastante diferente ao seu antecessor, o GW-BASIC. Assim a Microsoft decidiu incluir quatro programas de exemplo para ajudar os novos programadores a iniciarem-se na linguagem. Estes programas vinham com nomes de arquivos como MONEY.BAS (um gestor de finanças pessoais), REMLINE.BAS (remove números de linha num programa), NIBBLES.BAS (um jogo de cobras) e, claro, GORILLA.BAS.
+
+De acordo com Richard Moe, um dos criadores do Gorillas, a Microsoft entregou o código-fonte BASIC existente – retirado de fontes externas – para um jogo de artilharia e um jogo da cobra a um grupo de estudantes universitários de informática do seu programa de estágio “co-op”. O seu objetivo era reescrever o código em novos jogos que a Microsoft pudesse publicar legalmente com o MS-DOS.
+Três funcionários ofereceram-se para converter o jogo de artilharia que se tornou no Gorillas: Moe, Lance Delarme e Lyle Hazle.
+
+Entretanto, de acordo com Moe, ele criou o design, escreveu a música e os efeitos sonoros, fez a arte (incluindo os próprios gorilas) e alguma lógica de visualização. Hazle programou a mecânica central do jogo. Já Delarme concentrou-se no código de geração da paisagem urbana.
+
+Relativamente às origens do tema dos gorilas, Moe mencionou a necessidade de distanciar a Microsoft das batalhas de tanques de artilharia por razões legais: “Lembro-me especificamente de fazer um brainstorming com ideias nebulosas. Uma ideia era palhaços a atirar tortas, mas o que é que palhaços fazem em edifícios? King Kong, por outro lado…”.
+
+O trio de programadores trabalhou no Gorillas como um projeto paralelo, para além das suas funções regulares na Microsoft, durante alguns meses em 1990. O jogo foi lançado com o MS-DOS 5.0 em junho de 1991. O DOS 5 foi um enorme sucesso para a Microsoft, o que levou a boas críticas, que garantiram que o Gorillas se espalhasse rapidamente por todo o mundo. “Tivemos um sucesso muito acima das nossas expectativas”, recorda Silverberg sobre o sucesso do MS-DOS 5, “e isso deu-nos um impulso para o Windows 3.1 e o Windows 95”.
+
+Uma das características mais atraentes do Gorillas é que seu código-fonte era totalmente visível e editável, o que convidava à experimentação, especialmente para as crianças da época.
+
+Curiosamente, muitos adultos nem sequer sabiam que o Gorillas existia. Isto levou a episódios de jogos secretos em laboratórios de informática em todo o mundo.
+
+Após o seu lançamento com o MS-DOS em 1991, o Gorillas foi fornecido com todas as versões do MS-DOS e do Windows até ao Windows 2000.
+
+Como jogar Gorillas hoje em dia
+
+Hoje, a maneira mais fácil de jogar um jogo autêntico de Gorillas é através do Internet Archive. Assim permite executar o arquivo GORILLA.BAS original num emulador de MS-DOS via browser.
+Para executar o jogo original, basta seguir este link: https://archive.org/details/GorillasQbasic#
+Entretanto quando carregar a página, pressione o “botão de ligar” no meio da caixa no monitor para iniciar a máquina virtual. Este carregará o QBasic a partir do MS-DOS, e verá o código do Gorillas numa caixa azul na sua tela. Para jogar, clique na caixa do emulador e pressione Shift+F5 no teclado.
+
+Texto adaptado do original em: https://www.leak.pt/gorillas-do-ms-dos/
+https://en-wikipedia-org.translate.goog/wiki/Gorillas_(video_game)?_x_tr_sl=en&_x_tr_tl=pt&_x_tr_hl=pt&_x_tr_pto=tc

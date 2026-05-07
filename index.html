@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gorillas</title>
+    <!-- Security Meta Tags -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self';">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <a class="btn-voltar-landing" href="../index.html">Voltar para o site</a>
+    <div id="tela-inicial" class="tela">
+        <div class="logo-container">
+            <h1>GORILLAS</h1>
+            <p class="tagline">O Duelo Clássico Redesenhado</p>
+        </div>
+
+        <div class="modo-selector">
+            <button class="btn-modo ativo" id="modo-hxh">Humano × Humano</button>
+            <button class="btn-modo" id="modo-hxm">Humano × Máquina</button>
+        </div>
+
+        <div class="cartoes-container">
+            <div class="cartao-jogador p1">
+                <div class="avatar-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z">
+                        </path>
+                    </svg>
+                </div>
+                <h3>Jogador 1</h3>
+                <input type="text" id="jogador1" placeholder="Apelido" maxlength="10">
+            </div>
+
+            <div class="cartao-jogador p2">
+                <div class="avatar-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z">
+                        </path>
+                    </svg>
+                </div>
+                <h3>Jogador 2</h3>
+                <input type="text" id="jogador2" placeholder="Apelido" maxlength="10">
+            </div>
+        </div>
+
+        <p class="instrucao-touch">No celular: deslize ↕ no cenário para mudar o ângulo, ↔ para mudar a velocidade</p>
+
+        <div class="config-setup">
+            <div class="campo-config">
+                <label for="gravidade">FÍSICA (G)</label>
+                <input type="number" id="gravidade" placeholder="Padrão: 9.8" step="0.1" value="9.8">
+            </div>
+            <div class="campo-config">
+                <label for="pontosVencer">PONTOS PARA VENCER</label>
+                <input type="number" id="pontosVencer" placeholder="Padrão: 3" min="1" max="10" value="3">
+            </div>
+            <div class="campo-config escondido" id="campo-dificuldade">
+                <label for="dificuldade">DIFICULDADE</label>
+                <select id="dificuldade">
+                    <option value="facil">Fácil</option>
+                    <option value="medio" selected>Médio</option>
+                    <option value="dificil">Difícil</option>
+                </select>
+            </div>
+            <div class="campo-config">
+                <label for="mostrarTrajetoria">TRAJETÓRIA PRÉVIA</label>
+                <input type="checkbox" id="mostrarTrajetoria" checked>
+            </div>
+            <button id="iniciar" class="btn-principal">INICIAR DUELO</button>
+        </div>
+    </div>
+
+    <div id="tela-jogo" class="tela escondido">
+        <div class="info-jogo">
+            <div id="placar-jogador1" class="placar">
+                <div class="pontuacao" id="texto-placar1">Jogador 1: 0</div>
+                <div class="painel-controle" id="controle-p1">
+                    <label>Ângulo: <input type="number" id="angulo1" min="0" max="360" value="45"></label>
+                    <label class="label-velocidade">Vel:
+                        <input type="number" id="velocidade1" min="1" max="100" value="50">
+                        <input type="range" id="velocidade-range1" min="1" max="100" value="50">
+                    </label>
+                </div>
+            </div>
+            <div class="centro-info">
+                <div class="wind-container">
+                    <div id="info-vento">Vento: 0</div>
+                    <div id="container-seta">
+                        <div id="seta-vento"></div>
+                    </div>
+                </div>
+                <div id="status-turno"></div>
+                <button id="lancar">Lançar</button>
+            </div>
+            <div id="placar-jogador2" class="placar">
+                <div class="pontuacao" id="texto-placar2">Jogador 2: 0</div>
+                <div class="painel-controle" id="controle-p2">
+                    <label>Ângulo: <input type="number" id="angulo2" min="0" max="360" value="45"></label>
+                    <label class="label-velocidade">Vel:
+                        <input type="number" id="velocidade2" min="1" max="100" value="50">
+                        <input type="range" id="velocidade-range2" min="1" max="100" value="50">
+                    </label>
+                </div>
+            </div>
+        </div>
+        <canvas id="jogo"></canvas>
+    </div>
+
+    <!-- Tela de Vitoria Social/Imersiva -->
+    <div id="tela-vitoria" class="tela escondido">
+        <div class="vitoria-card">
+            <div class="coroa-icon">&#128081</div>
+            <h2 id="msg-vitoria">JOGADOR 1 VENCEU!</h2>
+            <p id="placar-final">Placar Final: 3 - 1</p>
+            <div class="acoes-vitoria">
+                <button id="btn-menu" class="btn-principal">VOLTAR AO MENU</button>
+                <a class="btn-encerrar btn-encerrar-vitoria" href="../index.html">VOLTAR PARA A LANDING</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="jogo.js"></script>
+</body>
+
+</html>
