@@ -3,6 +3,7 @@ node_modules/
 
 # Claude Code
 .agent/
+backlog/
 
 # OS
 .DS_Store

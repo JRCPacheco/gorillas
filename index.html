@@ -12,12 +12,13 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-    <a class="btn-voltar-landing" href="../index.html">Voltar para o site</a>
+    <canvas id="menu-skyline" aria-hidden="true"></canvas>
+    <a class="btn-voltar-landing btn-voltar-site" href="/">Voltar para o site</a>
     <div id="tela-inicial" class="tela">
         <div class="logo-container">
             <h1>GORILLAS</h1>
@@ -55,7 +56,8 @@
             </div>
         </div>
 
-        <p class="instrucao-touch">No celular: deslize ↕ no cenário para mudar o ângulo, ↔ para mudar a velocidade</p>
+        <p class="instrucao-experiencia">Experiência pensada para desktop e tablet na horizontal</p>
+        <p id="aviso-viewport" class="aviso-viewport escondido">Abra em uma tela maior ou gire o tablet para jogar com o visual completo.</p>
 
         <div class="config-setup">
             <div class="campo-config">
@@ -83,32 +85,39 @@
     </div>
 
     <div id="tela-jogo" class="tela escondido">
+        <button id="btn-voltar-menu-jogo" class="btn-voltar-landing btn-voltar-menu-jogo" type="button">Voltar ao menu</button>
+        <div id="aviso-jogo-viewport" class="aviso-jogo-viewport escondido">Esta versão foi otimizada para desktop e tablet em modo paisagem.</div>
         <div class="info-jogo">
             <div id="placar-jogador1" class="placar">
+                <div class="placar-etiqueta">Lado Esquerdo</div>
                 <div class="pontuacao" id="texto-placar1">Jogador 1: 0</div>
                 <div class="painel-controle" id="controle-p1">
-                    <label>Ângulo: <input type="number" id="angulo1" min="0" max="360" value="45"></label>
-                    <label class="label-velocidade">Vel:
+                    <label class="label-angulo"><span>Ângulo:</span><input type="number" id="angulo1" min="0" max="360" value="45"></label>
+                    <input type="range" id="angulo-range1" min="0" max="360" value="45">
+                    <label class="label-velocidade"><span>Vel:</span>
                         <input type="number" id="velocidade1" min="1" max="100" value="50">
                         <input type="range" id="velocidade-range1" min="1" max="100" value="50">
                     </label>
                 </div>
             </div>
             <div class="centro-info">
+                <div class="centro-etiqueta">Painel do Duelo</div>
                 <div class="wind-container">
+                    <div class="wind-label">Corrente de Ar</div>
                     <div id="info-vento">Vento: 0</div>
                     <div id="container-seta">
                         <div id="seta-vento"></div>
                     </div>
                 </div>
-                <div id="status-turno"></div>
                 <button id="lancar">Lançar</button>
             </div>
             <div id="placar-jogador2" class="placar">
+                <div class="placar-etiqueta">Lado Direito</div>
                 <div class="pontuacao" id="texto-placar2">Jogador 2: 0</div>
                 <div class="painel-controle" id="controle-p2">
-                    <label>Ângulo: <input type="number" id="angulo2" min="0" max="360" value="45"></label>
-                    <label class="label-velocidade">Vel:
+                    <label class="label-angulo"><span>Ângulo:</span><input type="number" id="angulo2" min="0" max="360" value="45"></label>
+                    <input type="range" id="angulo-range2" min="0" max="360" value="45">
+                    <label class="label-velocidade"><span>Vel:</span>
                         <input type="number" id="velocidade2" min="1" max="100" value="50">
                         <input type="range" id="velocidade-range2" min="1" max="100" value="50">
                     </label>
@@ -126,12 +135,12 @@
             <p id="placar-final">Placar Final: 3 - 1</p>
             <div class="acoes-vitoria">
                 <button id="btn-menu" class="btn-principal">VOLTAR AO MENU</button>
-                <a class="btn-encerrar btn-encerrar-vitoria" href="../index.html">VOLTAR PARA A LANDING</a>
+                <a class="btn-encerrar btn-encerrar-vitoria" href="/">VOLTAR PARA O SITE</a>
             </div>
         </div>
     </div>
 
-    <script src="jogo.js"></script>
+    <script src="jogo.js?v=20260509c"></script>
 </body>
 
 </html>

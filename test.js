@@ -11,6 +11,9 @@ const dom = new JSDOM(html, {
 // Emulate required browser APIs
 dom.window.Math.random = () => 0.5;
 dom.window.requestAnimationFrame = () => {};
+dom.window.innerWidth = 1280;
+dom.window.innerHeight = 800;
+dom.window.alert = () => {};
 dom.window.HTMLCanvasElement.prototype.getContext = () => ({
     fillRect: () => {},
     clearRect: () => {},
@@ -19,8 +22,15 @@ dom.window.HTMLCanvasElement.prototype.getContext = () => ({
     restore: () => {},
     beginPath: () => {},
     arc: () => {},
+    ellipse: () => {},
     fill: () => {},
     stroke: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    closePath: () => {},
+    createLinearGradient: () => ({ addColorStop: () => {} }),
+    createRadialGradient: () => ({ addColorStop: () => {} }),
+    setLineDash: () => {},
     getImageData: () => ({ data: new Uint8Array(4) })
 });
 

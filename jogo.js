@@ -1,26 +1,35 @@
 class JogoGorilas {
     constructor() {
+        document.body.classList.add('menu-ativa');
         this.canvas = document.getElementById('jogo');
         this.ctx = this.canvas.getContext('2d');
+        this.menuSkylineCanvas = document.getElementById('menu-skyline');
+        this.menuSkylineCtx = this.menuSkylineCanvas?.getContext('2d');
         this.bufferCidade = document.createElement('canvas');
         this.bufferCidadeCtx = this.bufferCidade.getContext('2d');
+        this.bufferColisao = document.createElement('canvas');
+        this.bufferColisaoCtx = this.bufferColisao.getContext('2d');
 
         this.inicializarCanvas();
         this.inicializarEstado();
         this.carregarAssets();
         this.configurarEventos();
+        this.configurarSkylineMenu();
+        this.iniciarLoopSkylineMenu();
     }
 
     inicializarCanvas() {
-        const larguraViewport = Math.max(640, window.innerWidth - 80);
+        const larguraViewport = Math.max(820, window.innerWidth - 80);
 
-        this.larguraTela = Math.max(640, Math.min(larguraViewport, 1200));
-        this.alturaTela = Math.max(420, Math.min(Math.floor(window.innerHeight * 0.7), 800));
+        this.larguraTela = Math.max(820, Math.min(larguraViewport, 1280));
+        this.alturaTela = Math.max(520, Math.min(Math.floor(window.innerHeight * 0.72), 820));
 
         this.canvas.width = this.larguraTela;
         this.canvas.height = this.alturaTela;
         this.bufferCidade.width = this.larguraTela;
         this.bufferCidade.height = this.alturaTela;
+        this.bufferColisao.width = this.larguraTela;
+        this.bufferColisao.height = this.alturaTela;
     }
 
     inicializarEstado() {
@@ -31,8 +40,14 @@ class JogoGorilas {
         this.animacaoAcerto = null;
         this.rastro = [];
         this.particulas = [];
+        this.impactosVisuais = [];
+        this.crateras = [];
+        this.efeitoLancamento = null;
+        this.feedbackDuelo = null;
+        this.screenShake = { tempo: 0, duracao: 0, forca: 0, x: 0, y: 0 };
         this.estrelas = [];
         this.audioCtx = null;
+        this.viewportCompativel = true;
 
         this.game = {
             iniciado: false,
@@ -60,10 +75,16 @@ class JogoGorilas {
         };
 
         this.city = {
-            predios: []
+            predios: [],
+            fundoDistante: [],
+            fundoMedio: [],
+            primeiroPlano: []
         };
 
         this.nuvens = [];
+        this.menuSkyline = [];
+        this.menuRuas = [];
+        this.menuCarros = [];
         this.projectile = this.criarEstadoProjetil();
         this.atualizarEscalasFisicas();
     }
@@ -99,8 +120,18 @@ class JogoGorilas {
         this.sprites = {
             gorila: {
                 imagem: new Image(),
-                larguraQuadro: 64,
-                alturaQuadro: 64,
+                larguraQuadro: 128,
+                alturaQuadro: 128,
+                escalaDesenho: 0.74,
+                ancoraPe: 0.5,
+                ancoraMao: {
+                    esquerda: { x: 0.77, y: 0.3 },
+                    direita: { x: 0.23, y: 0.3 }
+                },
+                hitbox: {
+                    raio: 26,
+                    offsetY: 0.58
+                },
                 poses: {
                     normal: 0,
                     bracoEsquerdo: 1,
@@ -152,10 +183,57 @@ class JogoGorilas {
         this.sprites.sol.imagem.src = 'assets/sol.png';
     }
 
+    obterConfigGorila() {
+        return this.sprites?.gorila || {
+            larguraQuadro: 64,
+            alturaQuadro: 64,
+            escalaDesenho: 1,
+            ancoraPe: 0.5,
+            ancoraMao: {
+                esquerda: { x: 0.72, y: 0.22 },
+                direita: { x: 0.28, y: 0.22 }
+            },
+            hitbox: {
+                raio: 20,
+                offsetY: 0.5
+            }
+        };
+    }
+
+    obterDimensoesRenderGorila() {
+        const gorila = this.obterConfigGorila();
+        const escala = gorila.escalaDesenho || 1;
+        return {
+            largura: gorila.larguraQuadro * escala,
+            altura: gorila.alturaQuadro * escala
+        };
+    }
+
+    viewportSuportado() {
+        const menorLado = Math.min(window.innerWidth, window.innerHeight);
+        const maiorLado = Math.max(window.innerWidth, window.innerHeight);
+        const paisagem = window.innerWidth >= window.innerHeight;
+        return paisagem && maiorLado >= 900 && menorLado >= 620;
+    }
+
+    atualizarAvisosViewport() {
+        this.viewportCompativel = this.viewportSuportado();
+        const avisoMenu = document.getElementById('aviso-viewport');
+        const avisoJogo = document.getElementById('aviso-jogo-viewport');
+        if (avisoMenu) {
+            avisoMenu.classList.toggle('escondido', this.viewportCompativel);
+        }
+        if (avisoJogo) {
+            avisoJogo.classList.toggle('escondido', this.viewportCompativel);
+        }
+    }
+
     configurarEventos() {
         const btnLancar = document.getElementById('lancar');
         const btnIniciar = document.getElementById('iniciar');
         const btnMenu = document.getElementById('btn-menu');
+        const btnVoltarMenuJogo = document.getElementById('btn-voltar-menu-jogo');
+        this.atualizarAvisosViewport();
 
         // As atualizações dos valores ocorrem na hora do lançamento (iniciarArremesso)
 
@@ -166,19 +244,10 @@ class JogoGorilas {
 
         btnIniciar.addEventListener('click', () => this.iniciarJogo());
         btnLancar.addEventListener('click', () => this.iniciarArremesso());
-        btnMenu.addEventListener('click', () => {
-            // Usar style.display para garantir prioridade máxima (acima de qualquer CSS)
-            document.getElementById('tela-vitoria').style.display = 'none';
-            document.getElementById('tela-jogo').style.display = 'none';
-            document.getElementById('tela-inicial').style.display = '';
-            document.getElementById('tela-inicial').classList.remove('escondido');
-            
-            // Reset completo do estado
-            this.game.iniciado = false;
-            this.game.ultimoTempo = 0;
-            this.animacaoAcerto = null;
-            this.projectile = this.criarEstadoProjetil();
-        });
+        btnMenu.addEventListener('click', () => this.voltarAoMenu());
+        if (btnVoltarMenuJogo) {
+            btnVoltarMenuJogo.addEventListener('click', () => this.voltarAoMenu());
+        }
 
         document.addEventListener('keydown', (evento) => {
             if (evento.code === 'Space' && this.game.iniciado && !this.projectile.ativo && !this.animacaoAcerto) {
@@ -206,11 +275,17 @@ class JogoGorilas {
 
         // Sincronizar range slider ↔ input number para velocidade
         ['1', '2'].forEach(n => {
-            const num = document.getElementById(`velocidade${n}`);
-            const range = document.getElementById(`velocidade-range${n}`);
-            if (num && range) {
-                num.addEventListener('input', () => { range.value = num.value; });
-                range.addEventListener('input', () => { num.value = range.value; });
+            const numAng = document.getElementById(`angulo${n}`);
+            const rangeAng = document.getElementById(`angulo-range${n}`);
+            const numVel = document.getElementById(`velocidade${n}`);
+            const rangeVel = document.getElementById(`velocidade-range${n}`);
+            if (numAng && rangeAng) {
+                numAng.addEventListener('input', () => { rangeAng.value = numAng.value; });
+                rangeAng.addEventListener('input', () => { numAng.value = rangeAng.value; });
+            }
+            if (numVel && rangeVel) {
+                numVel.addEventListener('input', () => { rangeVel.value = numVel.value; });
+                rangeVel.addEventListener('input', () => { numVel.value = rangeVel.value; });
             }
         });
 
@@ -235,6 +310,7 @@ class JogoGorilas {
             const j = this.game.jogadorAtual;
             const inpAng = document.getElementById(`angulo${j}`);
             const inpVel = document.getElementById(`velocidade${j}`);
+            const rangeAng = document.getElementById(`angulo-range${j}`);
             const rangeVel = document.getElementById(`velocidade-range${j}`);
             if (!inpAng || !inpVel) return;
 
@@ -242,6 +318,7 @@ class JogoGorilas {
                 // vertical → ângulo
                 const novoAng = Math.max(0, Math.min(360, (parseInt(inpAng.value, 10) || 45) - dy * 0.5));
                 inpAng.value = Math.round(novoAng);
+                if (rangeAng) rangeAng.value = inpAng.value;
             } else {
                 // horizontal → velocidade
                 const novaVel = Math.max(1, Math.min(100, (parseInt(inpVel.value, 10) || 50) + dx * 0.3));
@@ -253,6 +330,8 @@ class JogoGorilas {
         const _redimensionar = () => {
             this.inicializarCanvas();
             this.atualizarEscalasFisicas();
+            this.atualizarAvisosViewport();
+            this.configurarSkylineMenu();
 
             if (this.game.iniciado) {
                 this.gerarCidade();
@@ -268,8 +347,75 @@ class JogoGorilas {
         window.addEventListener('orientationchange', () => setTimeout(_redimensionar, 200));
     }
 
+    voltarAoMenu() {
+        this.transicionarTela(document.getElementById('tela-jogo'), document.getElementById('tela-inicial'));
+        this.ocultarTelaImediata(document.getElementById('tela-vitoria'));
+        document.body.classList.add('menu-ativa');
+
+        this.game.iniciado = false;
+        this.game.ultimoTempo = 0;
+        this.game.cpuPensando = false;
+        this.animacaoAcerto = null;
+        this.projectile = this.criarEstadoProjetil();
+        this.rastro = [];
+        this.particulas = [];
+        this.impactosVisuais = [];
+        this.feedbackDuelo = null;
+        this.efeitoLancamento = null;
+        this.screenShake = { tempo: 0, duracao: 0, forca: 0, x: 0, y: 0 };
+    }
+
+    ocultarTelaImediata(tela) {
+        if (!tela) return;
+        tela.style.display = 'none';
+        tela.style.opacity = '0';
+        tela.classList.add('escondido');
+        tela.classList.remove('tela-ativa');
+    }
+
+    revelarTelaImediata(tela) {
+        if (!tela) return;
+        tela.style.display = '';
+        tela.classList.remove('escondido');
+        tela.classList.add('tela-ativa');
+        tela.style.opacity = '1';
+    }
+
+    transicionarTela(telaSaindo, telaEntrando) {
+        if (!telaEntrando) return;
+
+        this.revelarTelaImediata(telaEntrando);
+        telaEntrando.classList.add('tela-transicao');
+        telaEntrando.style.opacity = '0';
+
+        requestAnimationFrame(() => {
+            telaEntrando.style.opacity = '1';
+        });
+
+        if (telaSaindo) {
+            telaSaindo.classList.add('tela-transicao');
+            telaSaindo.style.opacity = '0';
+            setTimeout(() => this.ocultarTelaImediata(telaSaindo), 220);
+        }
+
+        setTimeout(() => {
+            telaEntrando.classList.remove('tela-transicao');
+            telaEntrando.style.opacity = '';
+            if (telaSaindo) {
+                telaSaindo.classList.remove('tela-transicao');
+                telaSaindo.style.opacity = '';
+            }
+        }, 240);
+    }
+
     iniciarJogo() {
         try {
+            this.atualizarAvisosViewport();
+            if (!this.viewportCompativel) {
+                alert('Esta versão foi feita para desktop ou tablet em modo paisagem.');
+                return;
+            }
+
             const jogador1 = document.getElementById('jogador1').value || 'Jogador 1';
             const jogador2 = document.getElementById('jogador2').value || 'Jogador 2';
             const gravidadeInformada = Number(document.getElementById('gravidade').value);
@@ -298,16 +444,20 @@ class JogoGorilas {
             this.animacaoAcerto = null;
             this.rastro = [];
             this.particulas = [];
+            this.impactosVisuais = [];
+            this.crateras = [];
+            this.efeitoLancamento = null;
+            this.feedbackDuelo = null;
+            this.screenShake = { tempo: 0, duracao: 0, forca: 0, x: 0, y: 0 };
             this.gerarEstrelas();
 
-            // Limpar estilos inline residuais e mostrar telas corretas
-            document.getElementById('tela-inicial').style.display = '';
-            document.getElementById('tela-vitoria').style.display = 'none';
-            document.getElementById('tela-jogo').style.display = '';
-            
-            document.getElementById('tela-inicial').classList.add('escondido');
-            document.getElementById('tela-vitoria').classList.add('escondido');
-            document.getElementById('tela-jogo').classList.remove('escondido');
+            const telaInicial = document.getElementById('tela-inicial');
+            const telaVitoria = document.getElementById('tela-vitoria');
+            const telaJogo = document.getElementById('tela-jogo');
+
+            this.ocultarTelaImediata(telaVitoria);
+            this.transicionarTela(telaInicial, telaJogo);
+            document.body.classList.remove('menu-ativa');
 
             this.inicializarCanvas();
             this.atualizarEscalasFisicas();
@@ -363,12 +513,17 @@ class JogoGorilas {
             this.atualizarAnimacaoAcerto(delta);
         }
 
+        this.atualizarEfeitoLancamento(delta);
+
         if (this.projectile.ativo) {
             this.atualizarProjetil(delta);
         }
 
         this.atualizarNuvens(delta);
         this.atualizarParticulas(delta);
+        this.atualizarScreenShake(delta);
+        this.atualizarImpactosVisuais(delta);
+        this.atualizarFeedbackDuelo(delta);
 
         // Animar os "..." do status da CPU no DOM
         if (this.game.cpuPensando) {
@@ -380,16 +535,71 @@ class JogoGorilas {
         }
     }
 
+    atualizarEfeitoLancamento(delta) {
+        if (!this.efeitoLancamento) {
+            return;
+        }
+
+        this.efeitoLancamento.tempo += delta;
+        if (this.efeitoLancamento.tempo >= this.efeitoLancamento.duracao) {
+            this.efeitoLancamento = null;
+        }
+    }
+
+    atualizarScreenShake(delta) {
+        if (this.screenShake.tempo <= 0) {
+            this.screenShake.x = 0;
+            this.screenShake.y = 0;
+            return;
+        }
+
+        this.screenShake.tempo = Math.max(0, this.screenShake.tempo - delta);
+        const intensidade = this.screenShake.tempo / Math.max(0.001, this.screenShake.duracao);
+        const amplitude = this.screenShake.forca * intensidade;
+        this.screenShake.x = (Math.random() * 2 - 1) * amplitude;
+        this.screenShake.y = (Math.random() * 2 - 1) * amplitude * 0.7;
+    }
+
+    aplicarScreenShake(forca = 0, duracao = 0) {
+        this.screenShake = {
+            tempo: duracao,
+            duracao,
+            forca,
+            x: 0,
+            y: 0
+        };
+    }
+
+    atualizarFeedbackDuelo(delta) {
+        if (!this.feedbackDuelo) {
+            return;
+        }
+
+        this.feedbackDuelo.tempo -= delta;
+        if (this.feedbackDuelo.tempo <= 0) {
+            this.feedbackDuelo = null;
+            this.atualizarHUD();
+            return;
+        }
+
+        const statusEl = document.getElementById('status-turno');
+        if (statusEl && !this.game.cpuPensando) {
+            statusEl.textContent = this.feedbackDuelo.texto;
+        }
+    }
+
     atualizarNuvens(delta) {
         // Reduzida velocidade base: 0.15 -> 0.05 e removido multiplicador fixo alto (*100 -> *30)
-        const fatorVento = this.game.vento * 0.05; 
+        const fatorVento = this.game.vento * 0.05;
+        const agora = performance.now() / 1000;
 
         this.nuvens.forEach(nuvem => {
             // Movimento sutil e suave
             nuvem.x += (fatorVento * nuvem.velocidadeMult) * delta * 30;
+            nuvem.y = nuvem.yBase + Math.sin(agora * nuvem.flutuacaoVelocidade + nuvem.flutuacaoFase) * nuvem.flutuacaoAmplitude;
 
             // Wrapping: se a nuvem sumir de um lado, volta pelo outro
-            const margem = nuvem.larguraTotal + 20;
+            const margem = nuvem.larguraTotal * (nuvem.escalaBaseX || 1) + 40;
             if (nuvem.x > this.larguraTela + margem) {
                 nuvem.x = -margem;
             } else if (nuvem.x < -margem) {
@@ -425,69 +635,855 @@ class JogoGorilas {
             );
             const altura = this.numeroAleatorio(alturaMin, alturaMax);
             const yTopo = baseChao - altura;
-
-            this.city.predios.push({ x, largura, altura, yTopo });
+            const predio = { x, largura, altura, yTopo };
+            this.gerarDetalhesPredio(predio);
+            this.city.predios.push(predio);
             x += largura + this.numeroAleatorio(2, 7);
         }
 
+        this.gerarCamadasCenicas();
         this.desenharCidadeNoBuffer();
         if (this.nuvens.length === 0) {
             this.gerarNuvens();
         }
     }
 
-    gerarNuvens() {
-        this.nuvens = [];
-        const quantidade = 3; // Fixado em 3 conforme solicitado
+    gerarDetalhesPredio(predio) {
+        const larguraJanela = Math.max(6, Math.floor(predio.largura / 6));
+        const alturaJanela = Math.max(10, Math.floor(this.alturaTela / 28));
+        const espacamentoX = larguraJanela + 5;
+        const espacamentoY = alturaJanela + 9;
+        const janelasFrontais = [];
 
-        for (let i = 0; i < quantidade; i++) {
-            const larguraTotal = this.numeroAleatorio(100, 200);
-            const nuvem = {
-                x: this.numeroAleatorio(-100, this.larguraTela),
-                y: this.numeroAleatorio(40, this.alturaTela * 0.35),
-                velocidadeMult: 0.5 + Math.random() * 1.5, // Multiplicador para o paralaxe
-                larguraTotal,
-                circulos: []
-            };
-
-            // Cada nuvem é composta por 3 a 5 círculos sobrepostos
-            const numCirculos = this.numeroAleatorio(3, 5);
-            for (let j = 0; j < numCirculos; j++) {
-                nuvem.circulos.push({
-                    relX: (j * (larguraTotal / numCirculos)) - (larguraTotal / 4),
-                    relY: this.numeroAleatorio(-15, 15),
-                    raio: this.numeroAleatorio(25, 45)
+        for (let janelaX = predio.x + 6; janelaX <= predio.x + predio.largura - larguraJanela - 4; janelaX += espacamentoX) {
+            for (let janelaY = predio.yTopo + 8; janelaY <= predio.yTopo + predio.altura - alturaJanela - 6; janelaY += espacamentoY) {
+                janelasFrontais.push({
+                    x: janelaX,
+                    y: janelaY,
+                    largura: larguraJanela,
+                    altura: alturaJanela,
+                    acesa: Math.random() < 0.52
                 });
             }
-            this.nuvens.push(nuvem);
         }
+
+        const profundidade = Math.max(10, Math.floor(predio.largura * 0.16));
+        const larguraJanelaLateral = Math.max(3, Math.floor(larguraJanela * 0.55));
+        const espacamentoLateralY = alturaJanela + 12;
+        const espacamentoLateralX = larguraJanelaLateral + 3;
+        const janelasLaterais = [];
+
+        for (let janelaX = predio.x + predio.largura + 2; janelaX <= predio.x + predio.largura + profundidade - larguraJanelaLateral; janelaX += espacamentoLateralX) {
+            for (let janelaY = predio.yTopo + 10; janelaY <= predio.yTopo + predio.altura - alturaJanela - 8; janelaY += espacamentoLateralY) {
+                janelasLaterais.push({
+                    x: janelaX,
+                    y: janelaY,
+                    largura: larguraJanelaLateral,
+                    altura: alturaJanela - 2,
+                    acesa: Math.random() < 0.35
+                });
+            }
+        }
+
+        predio.janelasFrontais = janelasFrontais;
+        predio.janelasLaterais = janelasLaterais;
+    }
+
+    gerarCamadasCenicas() {
+        const criarFaixa = (quantidade, baseAltura, variacao, larguraMinFaixa, larguraMaxFaixa) => {
+            const faixa = [];
+            let x = -40;
+            for (let i = 0; i < quantidade; i += 1) {
+                const largura = this.numeroAleatorio(larguraMinFaixa, larguraMaxFaixa);
+                const altura = Math.max(40, baseAltura + this.numeroAleatorio(-variacao, variacao));
+                const item = {
+                    x,
+                    largura,
+                    altura,
+                    yTopo: this.alturaTela - altura - this.numeroAleatorio(20, 60)
+                };
+                item.luzes = this.gerarLuzesFaixa(item);
+                faixa.push(item);
+                x += largura * (0.65 + Math.random() * 0.45);
+                if (x > this.larguraTela + 60) break;
+            }
+            return faixa;
+        };
+
+        this.city.fundoDistante = criarFaixa(
+            18,
+            Math.floor(this.alturaTela * 0.24),
+            Math.floor(this.alturaTela * 0.08),
+            Math.max(60, Math.floor(this.larguraTela / 18)),
+            Math.max(110, Math.floor(this.larguraTela / 10))
+        );
+
+        this.city.fundoMedio = criarFaixa(
+            16,
+            Math.floor(this.alturaTela * 0.34),
+            Math.floor(this.alturaTela * 0.1),
+            Math.max(70, Math.floor(this.larguraTela / 16)),
+            Math.max(140, Math.floor(this.larguraTela / 8))
+        );
+
+        this.city.primeiroPlano = criarFaixa(
+            14,
+            Math.floor(this.alturaTela * 0.18),
+            Math.floor(this.alturaTela * 0.08),
+            Math.max(55, Math.floor(this.larguraTela / 20)),
+            Math.max(130, Math.floor(this.larguraTela / 9))
+        );
+    }
+
+    gerarLuzesFaixa(item) {
+        const luzes = [];
+        const colunas = Math.max(2, Math.floor(item.largura / 18));
+        const linhas = Math.max(2, Math.floor(item.altura / 26));
+        const larguraJanela = Math.max(2, Math.floor(item.largura / (colunas * 2.2)));
+        const alturaJanela = Math.max(3, Math.floor(item.altura / (linhas * 3.2)));
+        const passoX = item.largura / (colunas + 1);
+        const passoY = item.altura / (linhas + 1);
+
+        for (let cx = 1; cx <= colunas; cx += 1) {
+            for (let cy = 1; cy <= linhas; cy += 1) {
+                if (Math.random() < 0.42) {
+                    luzes.push({
+                        x: item.x + cx * passoX - larguraJanela / 2,
+                        y: item.yTopo + cy * passoY - alturaJanela / 2,
+                        largura: larguraJanela,
+                        altura: alturaJanela,
+                        intensidade: 0.22 + Math.random() * 0.42
+                    });
+                }
+            }
+        }
+
+        return luzes;
+    }
+
+    configurarSkylineMenu() {
+        if (!this.menuSkylineCanvas || !this.menuSkylineCtx) {
+            return;
+        }
+
+        const largura = Math.max(1280, Math.floor(window.innerWidth));
+        const altura = Math.max(720, Math.floor(window.innerHeight));
+        this.menuSkylineCanvas.width = largura;
+        this.menuSkylineCanvas.height = altura;
+        this.gerarSkylineMenu();
+        this.desenharSkylineMenu();
+    }
+
+    gerarSkylineMenu() {
+        const largura = this.menuSkylineCanvas?.width || 1160;
+        const altura = this.menuSkylineCanvas?.height || 760;
+        const baseMuitoDistante = Math.floor(altura * 0.76);
+        const baseDistante = Math.floor(altura * 0.82);
+        const baseMedia = Math.floor(altura * 0.89);
+        const baseFrente = Math.floor(altura * 0.95);
+        const gerarFaixa = (yBase, alturaMin, alturaMax, larguraMin, larguraMax, deslocamentoX = 0) => {
+            const faixa = [];
+            let x = -20 + deslocamentoX;
+            while (x < largura + 30) {
+                const predio = {
+                    x,
+                    largura: this.numeroAleatorio(larguraMin, larguraMax),
+                    altura: this.numeroAleatorio(alturaMin, alturaMax)
+                };
+                predio.yTopo = yBase - predio.altura;
+                predio.luzes = this.gerarLuzesFaixa(predio).map((luz) => ({
+                    ...luz,
+                    cintila: Math.random() < 0.035,
+                    fase: Math.random() * Math.PI * 2
+                }));
+                faixa.push(predio);
+                x += predio.largura + this.numeroAleatorio(6, 18);
+            }
+            return faixa;
+        };
+
+        this.menuSkyline = [
+            {
+                nome: 'distante',
+                deslocamentoY: 0,
+                alpha: 0.18,
+                predios: gerarFaixa(baseMuitoDistante, 18, 58, 16, 42)
+            },
+            {
+                nome: 'distante',
+                deslocamentoY: 0,
+                alpha: 0.32,
+                predios: gerarFaixa(baseDistante, 26, 86, 22, 58)
+            },
+            {
+                nome: 'medio',
+                deslocamentoY: 0,
+                alpha: 0.48,
+                predios: gerarFaixa(baseMedia, 34, 124, 28, 72, 18)
+            },
+            {
+                nome: 'frente',
+                deslocamentoY: 0,
+                alpha: 1.0,
+                predios: gerarFaixa(baseFrente, 42, 146, 34, 84, 8)
+            }
+        ];
+
+        this.menuRuas = [
+            { y: altura * 0.878, h: Math.max(20, altura * 0.030), alpha: 0.92, velocidadeBase: 16 },
+            { y: altura * 0.950, h: Math.max(28, altura * 0.044), alpha: 0.98, velocidadeBase: 28 }
+        ];
+        this.gerarCarrosSkylineMenu(largura);
+    }
+
+    gerarCarrosSkylineMenu(largura) {
+        const cores = ['#e2e8f0', '#1e293b', '#94a3b8', '#c0392b', '#2471a3', '#1e8449', '#7d3c98'];
+        this.menuCarros = this.menuRuas.flatMap((rua, indiceRua) => {
+            const quantidade = indiceRua === 0 ? 4 : 6;
+            return Array.from({ length: quantidade }, (_, indiceCarro) => ({
+                rua: indiceRua,
+                x: (largura / quantidade) * indiceCarro + this.numeroAleatorio(-80, 80),
+                largura: indiceRua === 0 ? this.numeroAleatorio(20, 28) : this.numeroAleatorio(26, 36),
+                altura: indiceRua === 0 ? Math.max(6, rua.h * 0.42) : Math.max(8, rua.h * 0.46),
+                cor: cores[Math.floor(Math.random() * cores.length)],
+                velocidade: (rua.velocidadeBase + this.numeroAleatorio(-3, 6)) * (indiceRua % 2 === 0 ? 1 : -1)
+            }));
+        });
+    }
+
+    desenharSkylineMenu() {
+        if (!this.menuSkylineCtx || !this.menuSkylineCanvas) {
+            return;
+        }
+
+        const ctx = this.menuSkylineCtx;
+        const largura = this.menuSkylineCanvas.width;
+        const altura = this.menuSkylineCanvas.height;
+        const tempo = Date.now() / 1000;
+        this.atualizarCarrosSkylineMenu(largura);
+        ctx.clearRect(0, 0, largura, altura);
+        const topoFaixa = altura * 0.66;
+        const baseFaixa = altura;
+
+        const fadeSuperior = ctx.createLinearGradient(0, 0, 0, altura);
+        fadeSuperior.addColorStop(0, 'rgba(15, 23, 42, 0)');
+        fadeSuperior.addColorStop(0.74, 'rgba(15, 23, 42, 0)');
+        fadeSuperior.addColorStop(1, 'rgba(15, 23, 42, 0.14)');
+
+        const desenharCamada = (camada) => {
+            if (!camada) return;
+            ctx.save();
+            ctx.globalAlpha = camada.alpha;
+            camada.predios.forEach((predio, indice) => {
+                const estilo = this.obterEstiloPredioFundo(predio, indice, camada.nome);
+                const y = predio.yTopo + camada.deslocamentoY;
+                const frenteGrad = ctx.createLinearGradient(predio.x, y, predio.x, y + predio.altura);
+                frenteGrad.addColorStop(0, estilo.frenteTopo);
+                frenteGrad.addColorStop(1, estilo.frenteBase);
+                ctx.fillStyle = frenteGrad;
+                ctx.fillRect(predio.x, y, predio.largura, predio.altura);
+
+                ctx.fillStyle = estilo.lateral;
+                ctx.beginPath();
+                ctx.moveTo(predio.x + predio.largura, y);
+                ctx.lineTo(predio.x + predio.largura + estilo.profundidade, y - estilo.profundidade * 0.32);
+                ctx.lineTo(predio.x + predio.largura + estilo.profundidade, y + predio.altura - estilo.profundidade * 0.1);
+                ctx.lineTo(predio.x + predio.largura, y + predio.altura);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = estilo.topo;
+                ctx.beginPath();
+                ctx.moveTo(predio.x, y);
+                ctx.lineTo(predio.x + predio.largura, y);
+                ctx.lineTo(predio.x + predio.largura + estilo.profundidade, y - estilo.profundidade * 0.32);
+                ctx.lineTo(predio.x + estilo.profundidade * 0.45, y - estilo.profundidade * 0.32);
+                ctx.closePath();
+                ctx.fill();
+
+                predio.luzes?.forEach((luz) => {
+                    const mod = luz.cintila
+                        ? 0.88 + Math.sin(tempo * 1.05 + luz.fase) * 0.12
+                        : 1;
+                    const alpha = Math.max(0.08, luz.intensidade * mod);
+                    ctx.fillStyle = `rgba(255, 214, 122, ${alpha})`;
+                    ctx.fillRect(luz.x, luz.y, luz.largura, luz.altura);
+                });
+            });
+            ctx.restore();
+        };
+
+        const camadaMuitoDistante = this.menuSkyline[0];
+        const camadaDistante = this.menuSkyline[1];
+        const camadaMedia = this.menuSkyline[2];
+        const camadaFrente = this.menuSkyline[3];
+
+        desenharCamada(camadaMuitoDistante);
+        desenharCamada(camadaDistante);
+        desenharCamada(camadaMedia);
+
+        const grad = ctx.createLinearGradient(0, altura * 0.62, 0, altura);
+        grad.addColorStop(0, 'rgba(255, 170, 92, 0)');
+        grad.addColorStop(1, 'rgba(255, 170, 92, 0.08)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, altura * 0.62, largura, altura * 0.38);
+
+        this.desenharRuasSkylineMenu(ctx, largura, altura, [0]);
+        this.desenharCarrosSkylineMenu(ctx, [0]);
+        this.desenharRuasSkylineMenu(ctx, largura, altura, [1]);
+        this.desenharCarrosSkylineMenu(ctx, [1]);
+        desenharCamada(camadaFrente);
+
+        ctx.fillStyle = fadeSuperior;
+        ctx.fillRect(0, 0, largura, altura);
+    }
+
+    desenharRuasSkylineMenu(ctx, largura, altura, indices = [0, 1]) {
+        indices.forEach((indice) => {
+            const rua = this.menuRuas[indice];
+            if (!rua) return;
+            ctx.save();
+            const isFrente = indice === 1;
+            const ruaY = rua.y;
+            const ruaH = rua.h;
+
+            // Calçada/passeio acima da rua
+            const calcadaH = Math.max(3, ruaH * 0.24);
+            const calcadaGrad = ctx.createLinearGradient(0, ruaY - calcadaH, 0, ruaY);
+            calcadaGrad.addColorStop(0, 'rgba(54, 58, 76, 0)');
+            calcadaGrad.addColorStop(0.5, `rgba(60, 64, 86, ${isFrente ? 0.46 : 0.32})`);
+            calcadaGrad.addColorStop(1, `rgba(78, 84, 108, ${isFrente ? 0.78 : 0.54})`);
+            ctx.fillStyle = calcadaGrad;
+            ctx.fillRect(0, ruaY - calcadaH, largura, calcadaH);
+
+            // Asfalto principal com gradiente para dar profundidade
+            const gradAsfalto = ctx.createLinearGradient(0, ruaY, 0, ruaY + ruaH);
+            if (isFrente) {
+                gradAsfalto.addColorStop(0,   'rgba(46, 48, 62, 0.97)');
+                gradAsfalto.addColorStop(0.4, 'rgba(34, 36, 50, 0.99)');
+                gradAsfalto.addColorStop(1,   'rgba(18, 20, 32, 1.0)');
+            } else {
+                gradAsfalto.addColorStop(0, 'rgba(38, 40, 54, 0.88)');
+                gradAsfalto.addColorStop(1, 'rgba(24, 26, 40, 0.93)');
+            }
+            ctx.fillStyle = gradAsfalto;
+            ctx.fillRect(0, ruaY, largura, ruaH);
+
+            // Meio-fio: linha de destaque no topo do asfalto
+            ctx.fillStyle = `rgba(108, 116, 146, ${isFrente ? 0.86 : 0.60})`;
+            ctx.fillRect(0, ruaY, largura, Math.max(1.5, ruaH * 0.08));
+
+            // Reflexo ambiental quente (glow laranja das luzes da cidade)
+            const refGrad = ctx.createLinearGradient(0, ruaY, 0, ruaY + ruaH * 0.65);
+            refGrad.addColorStop(0, `rgba(255, 140, 40, ${isFrente ? 0.08 : 0.05})`);
+            refGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = refGrad;
+            ctx.fillRect(0, ruaY, largura, ruaH * 0.65);
+
+            // Faixas tracejadas centrais (amarelas)
+            const tracoDash = isFrente ? 36 : 26;
+            const tracoGap  = isFrente ? 22 : 17;
+            const tracoH    = Math.max(1.5, ruaH * 0.11);
+            const tracoY    = ruaY + ruaH * 0.44;
+            ctx.fillStyle = `rgba(255, 220, 120, ${isFrente ? 0.72 : 0.50})`;
+            for (let x = 0; x < largura; x += tracoDash + tracoGap) {
+                ctx.fillRect(x, tracoY, tracoDash, tracoH);
+            }
+
+            // Linhas de borda brancas (edge lines)
+            const bordaAlpha = isFrente ? 0.34 : 0.22;
+            const bordaH     = Math.max(1, ruaH * 0.07);
+            ctx.fillStyle = `rgba(210, 216, 240, ${bordaAlpha})`;
+            ctx.fillRect(0, ruaY + ruaH * 0.14, largura, bordaH);
+            ctx.fillRect(0, ruaY + ruaH * 0.76, largura, bordaH);
+
+            ctx.restore();
+        });
+    }
+
+    atualizarCarrosSkylineMenu(largura) {
+        if (!this.menuCarros?.length || !this.menuRuas?.length) {
+            return;
+        }
+
+        const agora = performance.now();
+        const ultimo = this._ultimoTempoCarrosMenu || agora;
+        const delta = Math.min(0.05, (agora - ultimo) / 1000);
+        this._ultimoTempoCarrosMenu = agora;
+
+        this.menuCarros.forEach((carro) => {
+            carro.x += carro.velocidade * delta;
+            if (carro.velocidade > 0 && carro.x > largura + 40) {
+                carro.x = -50;
+            } else if (carro.velocidade < 0 && carro.x < -60) {
+                carro.x = largura + 50;
+            }
+        });
+    }
+
+    desenharCarrosSkylineMenu(ctx, ruasVisiveis = [0, 1]) {
+        if (!this.menuCarros?.length || !this.menuRuas?.length) {
+            return;
+        }
+
+        this.menuCarros.forEach((carro) => {
+            if (!ruasVisiveis.includes(carro.rua)) return;
+            const rua = this.menuRuas[carro.rua];
+            if (!rua) return;
+            const direcao = carro.velocidade >= 0 ? 1 : -1;
+            const corpoAltura = Math.max(4, carro.altura * 0.56);
+            const cabineLargura = Math.max(5, carro.largura * 0.36);
+            const cabineAltura = Math.max(3, carro.altura * 0.46);
+            const rodaRaio = Math.max(1.5, carro.altura * 0.24);
+            const y = rua.y + rua.h * 0.16;
+            const corpoY = y + cabineAltura * 0.42;
+            const cabineX = direcao > 0
+                ? carro.x + carro.largura * 0.46
+                : carro.x + carro.largura * 0.18;
+            const farolX = direcao > 0 ? carro.x + carro.largura - 2 : carro.x + 2;
+            const lanternaX = direcao > 0 ? carro.x + 1 : carro.x + carro.largura - 3;
+
+            ctx.save();
+            ctx.globalAlpha = 0.94;
+
+            // Sombra/reflexo no asfalto
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+            ctx.fillRect(carro.x + 2, corpoY + corpoAltura + rodaRaio * 0.6, carro.largura - 4, Math.max(1, rodaRaio * 0.5));
+
+            // Corpo do carro
+            ctx.fillStyle = carro.cor;
+            ctx.fillRect(carro.x, corpoY, carro.largura, corpoAltura);
+            ctx.fillRect(cabineX, y, cabineLargura, cabineAltura);
+
+            // Reflexo no teto da cabine
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+            ctx.fillRect(cabineX + 1, y + 1, Math.max(2, cabineLargura - 2), Math.max(1.5, cabineAltura * 0.32));
+
+            // Janelas (vidro escuro)
+            ctx.fillStyle = 'rgba(140, 190, 255, 0.28)';
+            ctx.fillRect(cabineX + 1, y + 1, Math.max(2, cabineLargura - 2), Math.max(2, cabineAltura * 0.7));
+
+            // Rodas
+            ctx.fillStyle = 'rgba(12, 14, 22, 0.96)';
+            ctx.beginPath();
+            ctx.arc(carro.x + carro.largura * 0.22, corpoY + corpoAltura, rodaRaio, 0, Math.PI * 2);
+            ctx.arc(carro.x + carro.largura * 0.78, corpoY + corpoAltura, rodaRaio, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Faróis (frente do carro) — glow branco-amarelado
+            ctx.globalAlpha = 0.82;
+            const farolGrad = ctx.createRadialGradient(farolX, corpoY + corpoAltura * 0.35, 0, farolX, corpoY + corpoAltura * 0.35, carro.largura * 0.55);
+            farolGrad.addColorStop(0, 'rgba(255, 248, 200, 0.72)');
+            farolGrad.addColorStop(1, 'rgba(255, 240, 160, 0)');
+            ctx.fillStyle = farolGrad;
+            ctx.fillRect(
+                direcao > 0 ? farolX - carro.largura * 0.5 : farolX,
+                corpoY - 1,
+                carro.largura * 0.55,
+                corpoAltura + 2
+            );
+
+            // Lanternas traseiras — glow vermelho
+            const lanternaGrad = ctx.createRadialGradient(lanternaX, corpoY + corpoAltura * 0.4, 0, lanternaX, corpoY + corpoAltura * 0.4, carro.largura * 0.32);
+            lanternaGrad.addColorStop(0, 'rgba(220, 40, 20, 0.62)');
+            lanternaGrad.addColorStop(1, 'rgba(180, 20, 10, 0)');
+            ctx.fillStyle = lanternaGrad;
+            ctx.fillRect(
+                direcao > 0 ? lanternaX : lanternaX - carro.largura * 0.28,
+                corpoY,
+                carro.largura * 0.32,
+                corpoAltura
+            );
+
+            ctx.restore();
+        });
+    }
+
+    iniciarLoopSkylineMenu() {
+        const loop = () => {
+            const telaInicial = document.getElementById('tela-inicial');
+            if (telaInicial && !telaInicial.classList.contains('escondido')) {
+                this.desenharSkylineMenu();
+            }
+            requestAnimationFrame(loop);
+        };
+
+        requestAnimationFrame(loop);
+    }
+
+    obterEstiloPredioFundo(predio, indice, camada) {
+        const tomBase = camada === 'distante'
+            ? 38 + (indice % 4) * 8
+            : camada === 'frente'
+                ? 62 + (indice % 4) * 9
+                : 48 + (indice % 5) * 10;
+        const profundidade = Math.max(6, Math.floor(predio.largura * (
+            camada === 'distante' ? 0.1 : camada === 'frente' ? 0.15 : 0.13
+        )));
+
+        return {
+            tomBase,
+            profundidade,
+            frenteTopo: `rgba(${tomBase + 18}, ${tomBase + 20}, ${tomBase + 36}, ${
+                camada === 'distante' ? 0.7 : camada === 'frente' ? 1.0 : 0.88
+            })`,
+            frenteBase: `rgba(${tomBase - 2}, ${tomBase}, ${tomBase + 12}, ${
+                camada === 'distante' ? 0.8 : camada === 'frente' ? 1.0 : 0.94
+            })`,
+            lateral: `rgba(${Math.max(8, tomBase - 14)}, ${Math.max(10, tomBase - 10)}, ${tomBase + 2}, ${
+                camada === 'distante' ? 0.55 : camada === 'frente' ? 1.0 : 0.88
+            })`,
+            topo: `rgba(${tomBase + 24}, ${tomBase + 18}, ${tomBase + 26}, ${
+                camada === 'distante' ? 0.24 : camada === 'frente' ? 0.96 : 0.72
+            })`,
+            janelaAcesa: camada === 'distante'
+                ? 'rgba(255, 214, 122, 0.16)'
+                : camada === 'frente'
+                    ? 'rgba(255, 214, 122, 0.34)'
+                    : 'rgba(255, 214, 122, 0.24)',
+            janelaApagada: camada === 'distante'
+                ? 'rgba(18, 26, 44, 0.26)'
+                : camada === 'frente'
+                    ? 'rgba(18, 26, 44, 0.82)'
+                    : 'rgba(18, 26, 44, 0.34)'
+        };
+    }
+
+    gerarNuvens() {
+        this.nuvens = [];
+        const camadas = [
+            {
+                nome: 'fundo',
+                quantidade: 2,
+                largura: [120, 210],
+                altura: [42, 74],
+                yMin: this.alturaTela * 0.08,
+                yMax: this.alturaTela * 0.18,
+                velocidade: [0.3, 0.75],
+                opacidade: [0.2, 0.34],
+                escala: [0.72, 0.9]
+            },
+            {
+                nome: 'medio',
+                quantidade: 3,
+                largura: [150, 260],
+                altura: [54, 92],
+                yMin: this.alturaTela * 0.12,
+                yMax: this.alturaTela * 0.26,
+                velocidade: [0.55, 1.15],
+                opacidade: [0.38, 0.58],
+                escala: [0.92, 1.08]
+            },
+            {
+                nome: 'frente',
+                quantidade: 2,
+                largura: [210, 320],
+                altura: [74, 116],
+                yMin: this.alturaTela * 0.16,
+                yMax: this.alturaTela * 0.32,
+                velocidade: [0.9, 1.5],
+                opacidade: [0.52, 0.72],
+                escala: [1.08, 1.28]
+            }
+        ];
+
+        camadas.forEach((camada, camadaIndex) => {
+            for (let i = 0; i < camada.quantidade; i += 1) {
+                const larguraTotal = this.numeroAleatorio(camada.largura[0], camada.largura[1]);
+                const alturaTotal = this.numeroAleatorio(camada.altura[0], camada.altura[1]);
+                const escalaBase = camada.escala[0] + Math.random() * (camada.escala[1] - camada.escala[0]);
+                const tipoSilhueta = this.sortearTipoNuvem(camada.nome);
+                const nuvem = {
+                    camada: camada.nome,
+                    profundidade: camadaIndex,
+                    tipoSilhueta,
+                    x: this.numeroAleatorio(-160, this.larguraTela + 80),
+                    y: this.numeroAleatorio(Math.floor(camada.yMin), Math.floor(camada.yMax)),
+                    yBase: 0,
+                    velocidadeMult: camada.velocidade[0] + Math.random() * (camada.velocidade[1] - camada.velocidade[0]),
+                    opacidadeBase: camada.opacidade[0] + Math.random() * (camada.opacidade[1] - camada.opacidade[0]),
+                    larguraTotal,
+                    alturaTotal,
+                    escalaBaseX: escalaBase,
+                    escalaBaseY: escalaBase * (0.94 + Math.random() * 0.1),
+                    flutuacaoAmplitude: 2 + camadaIndex * 1.8 + Math.random() * 2.4,
+                    flutuacaoVelocidade: 0.18 + Math.random() * 0.35,
+                    flutuacaoFase: Math.random() * Math.PI * 2,
+                    deformacaoAmplitudeX: 0.01 + camadaIndex * 0.004 + Math.random() * 0.008,
+                    deformacaoAmplitudeY: 0.008 + camadaIndex * 0.004 + Math.random() * 0.008,
+                    deformacaoFase: Math.random() * Math.PI * 2,
+                    brilhoQuente: Math.random() * (camada.nome === 'frente' ? 1 : 0.72),
+                    perfil: this.criarPerfilNuvem(tipoSilhueta),
+                    volumeFundo: {
+                        offsetX: -larguraTotal * (0.08 + Math.random() * 0.05),
+                        offsetY: alturaTotal * (0.08 + Math.random() * 0.08),
+                        escalaX: 0.74 + Math.random() * 0.1,
+                        escalaY: 0.76 + Math.random() * 0.1
+                    },
+                    volumeFrente: {
+                        offsetX: larguraTotal * (0.03 + Math.random() * 0.04),
+                        offsetY: -alturaTotal * (0.03 + Math.random() * 0.03),
+                        escalaX: 0.58 + Math.random() * 0.12,
+                        escalaY: 0.52 + Math.random() * 0.12,
+                        alpha: 0.14 + Math.random() * 0.12
+                    }
+                };
+
+                nuvem.yBase = nuvem.y;
+                this.nuvens.push(nuvem);
+            }
+        });
+    }
+
+    sortearTipoNuvem(camadaNome = 'medio') {
+        const rolagem = Math.random();
+
+        if (camadaNome === 'fundo') {
+            if (rolagem < 0.45) return 'longa';
+            if (rolagem < 0.78) return 'rasgada';
+            return 'compacta';
+        }
+
+        if (camadaNome === 'frente') {
+            if (rolagem < 0.34) return 'bloco';
+            if (rolagem < 0.68) return 'compacta';
+            return 'longa';
+        }
+
+        if (rolagem < 0.3) return 'compacta';
+        if (rolagem < 0.6) return 'longa';
+        if (rolagem < 0.82) return 'rasgada';
+        return 'bloco';
+    }
+
+    criarPerfilNuvem(tipo = 'medio') {
+        const base = {
+            topoA: 0.52 + Math.random() * 0.16,
+            topoB: 0.74 + Math.random() * 0.2,
+            topoC: 0.58 + Math.random() * 0.18,
+            valeA: 0.14 + Math.random() * 0.07,
+            valeB: 0.1 + Math.random() * 0.08,
+            baseCurva: 0.06 + Math.random() * 0.03,
+            recuoEsquerda: 0.16 + Math.random() * 0.07,
+            recuoDireita: 0.18 + Math.random() * 0.08
+        };
+
+        if (tipo === 'longa') {
+            return {
+                ...base,
+                topoA: 0.48 + Math.random() * 0.08,
+                topoB: 0.66 + Math.random() * 0.1,
+                topoC: 0.5 + Math.random() * 0.08,
+                valeA: 0.08 + Math.random() * 0.05,
+                valeB: 0.08 + Math.random() * 0.05,
+                baseCurva: 0.04 + Math.random() * 0.02,
+                recuoEsquerda: 0.1 + Math.random() * 0.04,
+                recuoDireita: 0.11 + Math.random() * 0.04
+            };
+        }
+
+        if (tipo === 'compacta') {
+            return {
+                ...base,
+                topoA: 0.64 + Math.random() * 0.14,
+                topoB: 0.88 + Math.random() * 0.08,
+                topoC: 0.7 + Math.random() * 0.12,
+                valeA: 0.18 + Math.random() * 0.08,
+                valeB: 0.16 + Math.random() * 0.08,
+                baseCurva: 0.08 + Math.random() * 0.03,
+                recuoEsquerda: 0.2 + Math.random() * 0.06,
+                recuoDireita: 0.22 + Math.random() * 0.06
+            };
+        }
+
+        if (tipo === 'rasgada') {
+            return {
+                ...base,
+                topoA: 0.44 + Math.random() * 0.12,
+                topoB: 0.58 + Math.random() * 0.12,
+                topoC: 0.42 + Math.random() * 0.12,
+                valeA: 0.04 + Math.random() * 0.04,
+                valeB: 0.03 + Math.random() * 0.04,
+                baseCurva: 0.03 + Math.random() * 0.02,
+                recuoEsquerda: 0.08 + Math.random() * 0.05,
+                recuoDireita: 0.1 + Math.random() * 0.05
+            };
+        }
+
+        if (tipo === 'bloco') {
+            return {
+                ...base,
+                topoA: 0.6 + Math.random() * 0.12,
+                topoB: 0.8 + Math.random() * 0.12,
+                topoC: 0.64 + Math.random() * 0.12,
+                valeA: 0.12 + Math.random() * 0.05,
+                valeB: 0.1 + Math.random() * 0.05,
+                baseCurva: 0.05 + Math.random() * 0.02,
+                recuoEsquerda: 0.14 + Math.random() * 0.05,
+                recuoDireita: 0.15 + Math.random() * 0.05
+            };
+        }
+
+        return base;
+    }
+
+    desenharFormaNuvem(ctx, nuvem, opcoes = {}) {
+        const largura = (nuvem.larguraTotal || 180) * (opcoes.escalaX || 1);
+        const altura = (nuvem.alturaTotal || 72) * (opcoes.escalaY || 1);
+        const x = nuvem.x + (opcoes.offsetX || 0);
+        const y = nuvem.y + (opcoes.offsetY || 0);
+        const perfil = nuvem.perfil || {
+            topoA: 0.58,
+            topoB: 0.86,
+            topoC: 0.64,
+            valeA: 0.18,
+            valeB: 0.16,
+            baseCurva: 0.08,
+            recuoEsquerda: 0.18,
+            recuoDireita: 0.2
+        };
+
+        const esquerda = x - largura / 2;
+        const direita = x + largura / 2;
+        const baseY = y + altura * 0.28;
+        const topoY = y - altura * 0.42;
+
+        const p0 = { x: esquerda + largura * perfil.recuoEsquerda, y: baseY };
+        const p1 = { x: esquerda + largura * 0.22, y: topoY + altura * (1 - perfil.topoA) };
+        const p2 = { x: esquerda + largura * 0.46, y: topoY + altura * (1 - perfil.topoB) };
+        const p3 = { x: esquerda + largura * 0.74, y: topoY + altura * (1 - perfil.topoC) };
+        const p4 = { x: direita - largura * perfil.recuoDireita, y: baseY };
+
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.quadraticCurveTo(esquerda + largura * 0.1, baseY - altura * 0.24, p1.x, p1.y);
+        ctx.quadraticCurveTo(esquerda + largura * 0.34, topoY - altura * perfil.valeA, p2.x, p2.y);
+        ctx.quadraticCurveTo(esquerda + largura * 0.6, topoY - altura * perfil.valeB, p3.x, p3.y);
+        ctx.quadraticCurveTo(direita - largura * 0.12, baseY - altura * 0.18, p4.x, p4.y);
+        ctx.quadraticCurveTo(x + largura * 0.2, baseY + altura * perfil.baseCurva, x, baseY + altura * 0.04);
+        ctx.quadraticCurveTo(x - largura * 0.22, baseY + altura * perfil.baseCurva, p0.x, p0.y);
+        ctx.closePath();
     }
 
     desenharCidadeNoBuffer() {
         const ctx = this.bufferCidadeCtx;
+        const ctxColisao = this.bufferColisaoCtx;
         ctx.clearRect(0, 0, this.larguraTela, this.alturaTela);
+        ctxColisao.clearRect(0, 0, this.larguraTela, this.alturaTela);
 
-        // Desenhar Asfalto/Solo na base para os prédios não "flutuarem"
-        ctx.fillStyle = '#111827'; // Cinza muito escuro/preto para o solo
-        ctx.fillRect(0, this.alturaTela - 15, this.larguraTela, 15);
+        const gradSolo = ctx.createLinearGradient(0, this.alturaTela - 40, 0, this.alturaTela);
+        gradSolo.addColorStop(0, '#312e81');
+        gradSolo.addColorStop(0.5, '#1f2937');
+        gradSolo.addColorStop(1, '#020617');
+        ctx.fillStyle = gradSolo;
+        ctx.fillRect(0, this.alturaTela - 22, this.larguraTela, 22);
+        ctxColisao.fillStyle = '#000';
+        ctxColisao.fillRect(0, this.alturaTela - 22, this.larguraTela, 22);
 
         this.city.predios.forEach((predio, indice) => {
-            const tomBase = 60 + (indice % 4) * 15;
-            // Cores mais quentes para o entardecer (mistura de cinza com tons terrosos/laranjas)
-            ctx.fillStyle = `rgb(${tomBase + 10}, ${tomBase}, ${tomBase - 5})`;
+            const tomBase = 58 + (indice % 5) * 12;
+            const profundidade = Math.max(10, Math.floor(predio.largura * 0.16));
+            const alturaBeiral = Math.max(6, Math.floor(this.alturaTela / 70));
+            const sombraComprimento = Math.max(18, Math.floor(predio.largura * 0.32));
+
+            ctx.fillStyle = 'rgba(8, 12, 24, 0.18)';
+            ctx.beginPath();
+            ctx.moveTo(predio.x + predio.largura, predio.yTopo + predio.altura * 0.08);
+            ctx.lineTo(predio.x + predio.largura + sombraComprimento, predio.yTopo + predio.altura * 0.12);
+            ctx.lineTo(predio.x + predio.largura + sombraComprimento, predio.yTopo + predio.altura);
+            ctx.lineTo(predio.x + predio.largura, predio.yTopo + predio.altura);
+            ctx.closePath();
+            ctx.fill();
+
+            const frenteGrad = ctx.createLinearGradient(predio.x, predio.yTopo, predio.x, predio.yTopo + predio.altura);
+            frenteGrad.addColorStop(0, `rgb(${tomBase + 24}, ${tomBase + 10}, ${tomBase + 8})`);
+            frenteGrad.addColorStop(0.55, `rgb(${tomBase + 6}, ${tomBase - 2}, ${tomBase + 2})`);
+            frenteGrad.addColorStop(1, `rgb(${tomBase - 10}, ${tomBase - 12}, ${tomBase - 6})`);
+            ctx.fillStyle = frenteGrad;
             ctx.fillRect(predio.x, predio.yTopo, predio.largura, predio.altura);
 
-            const larguraJanela = Math.max(6, Math.floor(predio.largura / 6));
-            const alturaJanela = Math.max(10, Math.floor(this.alturaTela / 28));
-            const espacamentoX = larguraJanela + 5;
-            const espacamentoY = alturaJanela + 9;
+            ctx.fillStyle = 'rgba(255, 196, 120, 0.12)';
+            ctx.fillRect(predio.x + 2, predio.yTopo + 2, Math.max(2, Math.floor(predio.largura * 0.1)), predio.altura - 4);
 
-            for (let janelaX = predio.x + 6; janelaX <= predio.x + predio.largura - larguraJanela - 4; janelaX += espacamentoX) {
-                for (let janelaY = predio.yTopo + 8; janelaY <= predio.yTopo + predio.altura - alturaJanela - 6; janelaY += espacamentoY) {
-                    ctx.fillStyle = Math.random() < 0.45 ? '#f1c40f' : '#23303d';
-                    ctx.fillRect(janelaX, janelaY, larguraJanela, alturaJanela);
-                }
-            }
+            ctx.fillStyle = `rgba(${Math.max(20, tomBase - 30)}, ${Math.max(18, tomBase - 32)}, ${Math.max(24, tomBase - 18)}, 0.95)`;
+            ctx.beginPath();
+            ctx.moveTo(predio.x + predio.largura, predio.yTopo);
+            ctx.lineTo(predio.x + predio.largura + profundidade, predio.yTopo - profundidade * 0.38);
+            ctx.lineTo(predio.x + predio.largura + profundidade, predio.yTopo + predio.altura - profundidade * 0.15);
+            ctx.lineTo(predio.x + predio.largura, predio.yTopo + predio.altura);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255, 184, 108, 0.18)';
+            ctx.beginPath();
+            ctx.moveTo(predio.x, predio.yTopo);
+            ctx.lineTo(predio.x + predio.largura, predio.yTopo);
+            ctx.lineTo(predio.x + predio.largura + profundidade, predio.yTopo - profundidade * 0.38);
+            ctx.lineTo(predio.x + profundidade * 0.5, predio.yTopo - profundidade * 0.38);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(23, 32, 52, 0.85)';
+            ctx.fillRect(predio.x, predio.yTopo, predio.largura, alturaBeiral);
+
+            ctxColisao.fillStyle = '#000';
+            ctxColisao.fillRect(predio.x, predio.yTopo, predio.largura, predio.altura);
+            ctxColisao.beginPath();
+            ctxColisao.moveTo(predio.x + predio.largura, predio.yTopo);
+            ctxColisao.lineTo(predio.x + predio.largura + profundidade, predio.yTopo - profundidade * 0.38);
+            ctxColisao.lineTo(predio.x + predio.largura + profundidade, predio.yTopo + predio.altura - profundidade * 0.15);
+            ctxColisao.lineTo(predio.x + predio.largura, predio.yTopo + predio.altura);
+            ctxColisao.closePath();
+            ctxColisao.fill();
+            ctxColisao.beginPath();
+            ctxColisao.moveTo(predio.x, predio.yTopo);
+            ctxColisao.lineTo(predio.x + predio.largura, predio.yTopo);
+            ctxColisao.lineTo(predio.x + predio.largura + profundidade, predio.yTopo - profundidade * 0.38);
+            ctxColisao.lineTo(predio.x + profundidade * 0.5, predio.yTopo - profundidade * 0.38);
+            ctxColisao.closePath();
+            ctxColisao.fill();
+
+            predio.janelasFrontais.forEach((janela) => {
+                ctx.fillStyle = janela.acesa ? '#ffd36b' : '#23303d';
+                ctx.fillRect(janela.x, janela.y, janela.largura, janela.altura);
+            });
+
+            predio.janelasLaterais.forEach((janela) => {
+                ctx.fillStyle = janela.acesa ? 'rgba(255, 214, 122, 0.5)' : 'rgba(24, 33, 51, 0.9)';
+                ctx.fillRect(janela.x, janela.y, janela.largura, janela.altura);
+            });
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(predio.x, predio.yTopo);
+            ctx.lineTo(predio.x + predio.largura, predio.yTopo);
+            ctx.stroke();
+        });
+
+        this.aplicarCraterasNosBuffers();
+    }
+
+    aplicarCraterasNosBuffers() {
+        if (!this.crateras || this.crateras.length === 0) {
+            return;
+        }
+
+        const cortes = [
+            { ctx: this.bufferColisaoCtx, ajuste: 0 },
+            { ctx: this.bufferCidadeCtx, ajuste: 2 }
+        ];
+
+        cortes.forEach(({ ctx, ajuste }) => {
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = '#000';
+
+            this.crateras.forEach((cratera) => {
+                this.desenharFormaCratera(ctx, cratera, ajuste);
+            });
+
+            ctx.restore();
         });
     }
 
@@ -496,7 +1492,9 @@ class JogoGorilas {
             return;
         }
 
-        const sprite = this.sprites?.gorila || { larguraQuadro: 64, alturaQuadro: 64 };
+        const sprite = this.obterConfigGorila();
+        const render = this.obterDimensoesRenderGorila();
+        const ancoraPe = sprite.ancoraPe ?? 0.5;
         const margem = Math.min(2, Math.floor(this.city.predios.length / 4));
         const indiceEsquerda = Math.min(this.city.predios.length - 1, margem + 1);
         const indiceDireita = Math.max(0, this.city.predios.length - margem - 2);
@@ -504,18 +1502,18 @@ class JogoGorilas {
         const predio2 = this.city.predios[indiceDireita];
 
         this.gorilas[1] = {
-            x: predio1.x + predio1.largura / 2 - sprite.larguraQuadro / 2,
-            y: predio1.yTopo - sprite.alturaQuadro,
-            largura: sprite.larguraQuadro,
-            altura: sprite.alturaQuadro,
+            x: predio1.x + predio1.largura / 2 - render.largura * ancoraPe,
+            y: predio1.yTopo - render.altura,
+            largura: render.largura,
+            altura: render.altura,
             vivo: true
         };
 
         this.gorilas[2] = {
-            x: predio2.x + predio2.largura / 2 - sprite.larguraQuadro / 2,
-            y: predio2.yTopo - sprite.alturaQuadro,
-            largura: sprite.larguraQuadro,
-            altura: sprite.alturaQuadro,
+            x: predio2.x + predio2.largura / 2 - render.largura * ancoraPe,
+            y: predio2.yTopo - render.altura,
+            largura: render.largura,
+            altura: render.altura,
             vivo: true
         };
     }
@@ -531,18 +1529,22 @@ class JogoGorilas {
     }
 
     atualizarHUD() {
-        document.getElementById('texto-placar1').textContent =
-            `${this.jogadores[1].nome}: ${this.jogadores[1].pontos}`;
-        document.getElementById('texto-placar2').textContent =
-            `${this.jogadores[2].nome}: ${this.jogadores[2].pontos}`;
+        document.getElementById('texto-placar1').innerHTML =
+            `<span class="placar-nome">${this.jogadores[1].nome}</span><span class="placar-valor">${this.jogadores[1].pontos}</span>`;
+        document.getElementById('texto-placar2').innerHTML =
+            `<span class="placar-nome">${this.jogadores[2].nome}</span><span class="placar-valor">${this.jogadores[2].pontos}</span>`;
             
         document.getElementById('placar-jogador1').classList.toggle('ativo', this.game.jogadorAtual === 1);
         document.getElementById('placar-jogador2').classList.toggle('ativo', this.game.jogadorAtual === 2);
         
         document.getElementById('angulo1').disabled = this.game.jogadorAtual !== 1;
+        document.getElementById('angulo-range1').disabled = this.game.jogadorAtual !== 1;
         document.getElementById('velocidade1').disabled = this.game.jogadorAtual !== 1;
+        document.getElementById('velocidade-range1').disabled = this.game.jogadorAtual !== 1;
         document.getElementById('angulo2').disabled = this.game.jogadorAtual !== 2;
+        document.getElementById('angulo-range2').disabled = this.game.jogadorAtual !== 2;
         document.getElementById('velocidade2').disabled = this.game.jogadorAtual !== 2;
+        document.getElementById('velocidade-range2').disabled = this.game.jogadorAtual !== 2;
 
         if (this.game.modoIA) {
             document.getElementById('controle-p2').style.visibility = 'hidden';
@@ -552,18 +1554,31 @@ class JogoGorilas {
             document.getElementById('lancar').disabled = false;
         }
 
+        document.getElementById('lancar')?.classList.toggle('pronto', this.game.iniciado && !this.projectile.ativo && !this.animacaoAcerto);
+
         // Sincronizar sliders com os valores atuais dos inputs (ex: após CPU definir valores)
         ['1', '2'].forEach(n => {
-            const num = document.getElementById(`velocidade${n}`);
-            const range = document.getElementById(`velocidade-range${n}`);
-            if (num && range) range.value = num.value;
+            const numAng = document.getElementById(`angulo${n}`);
+            const rangeAng = document.getElementById(`angulo-range${n}`);
+            const numVel = document.getElementById(`velocidade${n}`);
+            const rangeVel = document.getElementById(`velocidade-range${n}`);
+            if (numAng && rangeAng) rangeAng.value = numAng.value;
+            if (numVel && rangeVel) rangeVel.value = numVel.value;
         });
 
         // Status de turno no DOM (texto fixo — o "CPU pensando..." é atualizado no loop)
         const statusEl = document.getElementById('status-turno');
         if (statusEl && !this.game.cpuPensando) {
             statusEl.textContent = this.game.iniciado
-                ? `Vez de ${this.jogadores[this.game.jogadorAtual].nome}`
+                ? `Turno de ${this.jogadores[this.game.jogadorAtual].nome}`
+                : '';
+        }
+
+        const resumoEl = document.getElementById('hud-resumo');
+        if (resumoEl) {
+            const atual = this.jogadores[this.game.jogadorAtual];
+            resumoEl.textContent = this.game.iniciado
+                ? `Ajuste: ang ${Math.round(atual.angulo)} | vel ${Math.round(atual.velocidade)}`
                 : '';
         }
 
@@ -586,6 +1601,8 @@ class JogoGorilas {
         } else {
             seta.style.width = '0%';
         }
+
+        document.querySelector('.wind-container')?.style.setProperty('--wind-pulse', `${0.16 + Math.abs(this.game.vento) * 0.03}`);
     }
 
     iniciarArremesso() {
@@ -609,6 +1626,11 @@ class JogoGorilas {
         const origem = this.obterOrigemArremesso(this.game.jogadorAtual);
         const anguloRadianos = (angulo * Math.PI) / 180;
         const velocidadeEscalada = velocidade * this.escalaFisica.velocidade;
+        this.efeitoLancamento = {
+            jogador: this.game.jogadorAtual,
+            tempo: 0,
+            duracao: 0.18
+        };
 
         this.projectile = {
             ativo: true,
@@ -623,22 +1645,28 @@ class JogoGorilas {
             tempoVoo: 0,
             x: origem.x,
             y: origem.y,
-            rotacao: 0
+            rotacao: 0,
+            quaseAcertoDisparado: false
         };
     }
 
     obterOrigemArremesso(jogador) {
         const gorila = this.gorilas[jogador];
-        const deslocamentoX = jogador === 1 ? gorila.largura * 0.72 : gorila.largura * 0.28;
+        const config = this.obterConfigGorila();
+        const ancora = jogador === 1 ? config.ancoraMao.direita : config.ancoraMao.esquerda;
 
         return {
-            x: gorila.x + deslocamentoX,
-            y: gorila.y + gorila.altura * 0.22
+            x: gorila.x + gorila.largura * ancora.x,
+            y: gorila.y + gorila.altura * ancora.y
         };
     }
 
     atualizarProjetil(delta) {
         this.projectile.tempoVoo += delta;
+        const duracaoRastro = 0.52;
+        this.rastro = this.rastro
+            .map((ponto) => ({ ...ponto, vida: (ponto.vida ?? 0) + delta }))
+            .filter((ponto) => ponto.vida < duracaoRastro);
 
         const posicao = this.calcularPosicaoProjetil(this.projectile.tempoVoo);
         this.projectile.x = posicao.x;
@@ -650,11 +1678,14 @@ class JogoGorilas {
             posicao.x - this.rastro[this.rastro.length - 1].x,
             posicao.y - this.rastro[this.rastro.length - 1].y
         ) > 8) {
-            this.rastro.push({ x: posicao.x, y: posicao.y });
+            this.rastro.push({ x: posicao.x, y: posicao.y, vida: 0 });
         }
+
+        this.verificarQuaseAcerto(posicao.x, posicao.y);
 
         const impacto = this.verificarImpactoProjetil(this.projectile.x, this.projectile.y);
         if (impacto.tipo !== 'nenhum') {
+            this.rastro = [];
             this.resolverImpacto(impacto);
         }
     }
@@ -713,12 +1744,14 @@ class JogoGorilas {
     }
 
     gorilaFoiAtingido(x, y) {
-        const raioAcerto = 20;
+        const config = this.obterConfigGorila();
+        const raioAcerto = config.hitbox?.raio || 20;
+        const offsetY = config.hitbox?.offsetY || 0.5;
 
         for (let jogador = 1; jogador <= 2; jogador += 1) {
             const gorila = this.gorilas[jogador];
             const centroX = gorila.x + gorila.largura / 2;
-            const centroY = gorila.y + gorila.altura / 2;
+            const centroY = gorila.y + gorila.altura * offsetY;
 
             if (this.distanciaEntrePontos(x, y, centroX, centroY) <= raioAcerto) {
                 return jogador;
@@ -726,6 +1759,40 @@ class JogoGorilas {
         }
 
         return null;
+    }
+
+    verificarQuaseAcerto(x, y) {
+        if (!this.projectile.ativo || this.projectile.quaseAcertoDisparado) {
+            return;
+        }
+
+        const config = this.obterConfigGorila();
+        const raioAcerto = config.hitbox?.raio || 20;
+        const offsetY = config.hitbox?.offsetY || 0.5;
+        const margemQuase = raioAcerto + 28;
+
+        for (let jogador = 1; jogador <= 2; jogador += 1) {
+            if (jogador === this.projectile.jogador) {
+                continue;
+            }
+
+            const gorila = this.gorilas[jogador];
+            const centroX = gorila.x + gorila.largura / 2;
+            const centroY = gorila.y + gorila.altura * offsetY;
+            const distancia = this.distanciaEntrePontos(x, y, centroX, centroY);
+
+            if (distancia > raioAcerto && distancia <= margemQuase) {
+                this.projectile.quaseAcertoDisparado = true;
+                this.feedbackDuelo = {
+                    texto: `Quase em ${this.jogadores[jogador].nome}!`,
+                    tempo: 0.55,
+                    jogador
+                };
+                this.aplicarScreenShake(3, 0.12);
+                this.tocarSomQuaseAcerto();
+                return;
+            }
+        }
     }
 
     cidadeTemMaterialEm(x, y) {
@@ -736,7 +1803,7 @@ class JogoGorilas {
             return false;
         }
 
-        const alpha = this.bufferCidadeCtx.getImageData(sampleX, sampleY, 1, 1).data[3];
+        const alpha = this.bufferColisaoCtx.getImageData(sampleX, sampleY, 1, 1).data[3];
         return alpha > 0;
     }
 
@@ -745,7 +1812,9 @@ class JogoGorilas {
             this.aplicarExplosao(impacto.x, impacto.y, this.escalaFisica.raioExplosao);
             this.ajustarPosicaoGorilas();
             this.spawnarParticulas(impacto.x, impacto.y, 'predio');
-            this.tocarSomExplosao();
+            this.spawnarImpactoVisual(impacto.x, impacto.y, 'predio');
+            this.aplicarScreenShake(8, 0.22);
+            this.tocarSomExplosao('predio');
             this.game.solAtingido = false;
             this.encerrarTurno();
             return;
@@ -755,7 +1824,9 @@ class JogoGorilas {
             const vencedor = impacto.jogador === 1 ? 2 : 1;
             this.jogadores[vencedor].pontos += 1;
             this.spawnarParticulas(impacto.x, impacto.y, 'gorila');
-            this.tocarSomExplosao();
+            this.spawnarImpactoVisual(impacto.x, impacto.y, 'gorila');
+            this.aplicarScreenShake(14, 0.32);
+            this.tocarSomExplosao('gorila');
             this.atualizarHUD();
             this.iniciarAnimacaoAcerto(vencedor, impacto.jogador, impacto.x, impacto.y);
             return;
@@ -763,6 +1834,8 @@ class JogoGorilas {
 
         if (impacto.tipo === 'sol') {
             this.game.solAtingido = true;
+            this.spawnarImpactoVisual(impacto.x, impacto.y, 'sol');
+            this.aplicarScreenShake(5, 0.18);
             this.encerrarTurno();
             return;
         }
@@ -785,13 +1858,45 @@ class JogoGorilas {
     }
 
     aplicarExplosao(x, y, raio) {
-        const ctx = this.bufferCidadeCtx;
-        ctx.save();
-        ctx.globalCompositeOperation = 'destination-out';
+        const pontos = [];
+        const segmentos = 10 + this.numeroAleatorio(0, 4);
+
+        for (let i = 0; i < segmentos; i += 1) {
+            const angulo = (Math.PI * 2 * i) / segmentos;
+            const ruido = 0.74 + Math.random() * 0.36;
+            pontos.push({
+                angulo,
+                raio: raio * ruido
+            });
+        }
+
+        this.crateras.push({ x, y, raio, pontos });
+        this.desenharCidadeNoBuffer();
+    }
+
+    desenharFormaCratera(ctx, cratera, ajuste = 0) {
+        const pontos = cratera.pontos || [];
+
+        if (pontos.length === 0) {
+            ctx.beginPath();
+            ctx.arc(cratera.x, cratera.y, cratera.raio + ajuste, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+        }
+
         ctx.beginPath();
-        ctx.arc(x, y, raio, 0, Math.PI * 2);
+        pontos.forEach((ponto, indice) => {
+            const raio = Math.max(3, ponto.raio + ajuste);
+            const px = cratera.x + Math.cos(ponto.angulo) * raio;
+            const py = cratera.y + Math.sin(ponto.angulo) * raio;
+            if (indice === 0) {
+                ctx.moveTo(px, py);
+            } else {
+                ctx.lineTo(px, py);
+            }
+        });
+        ctx.closePath();
         ctx.fill();
-        ctx.restore();
     }
 
     ajustarPosicaoGorilas() {
@@ -821,6 +1926,7 @@ class JogoGorilas {
 
     encerrarTurno() {
         this.projectile = this.criarEstadoProjetil();
+        this.efeitoLancamento = null;
         this.game.jogadorAtual = this.game.jogadorAtual === 1 ? 2 : 1;
         this.sortearVento();
         this._verificarTurnoIA();
@@ -841,6 +1947,9 @@ class JogoGorilas {
         this.game.jogadorAtual = vencedorId;
         this.game.solAtingido = false;
         this.animacaoAcerto = null;
+        this.efeitoLancamento = null;
+        this.impactosVisuais = [];
+        this.crateras = [];
         this.gerarCidade();
         this.posicionarGorilas();
         this.sortearVento();
@@ -858,10 +1967,9 @@ class JogoGorilas {
         this.animacaoAcerto = null;
         this.projectile = this.criarEstadoProjetil();
 
-        // Usar style.display diretamente (máxima prioridade, ignora especificidade CSS)
-        document.getElementById('tela-jogo').style.display = 'none';
+        this.transicionarTela(document.getElementById('tela-jogo'), document.getElementById('tela-vitoria'));
         document.getElementById('tela-vitoria').style.display = 'flex';
-        document.getElementById('tela-vitoria').classList.remove('escondido');
+        document.body.classList.remove('menu-ativa');
         
         this.tocarSomVitoria();
         document.getElementById('msg-vitoria').textContent = `${vencedor.nome.toUpperCase()} VENCEU!`;
@@ -873,6 +1981,8 @@ class JogoGorilas {
             return;
         }
 
+        this.ctx.save();
+        this.ctx.translate(this.screenShake.x, this.screenShake.y);
         this.desenharFundo();
         this.desenharSol(this.game.solAtingido ? 'surpreso' : 'sorrindo');
         this.desenharNuvens();
@@ -880,6 +1990,7 @@ class JogoGorilas {
         this.desenharRastro();
         this.desenharPreviewTrajetoria();
         this.desenharParticulas();
+        this.desenharImpactosVisuais();
         this.desenharGorilas();
         this.desenharIndicadorTurno();
         this.desenharProjetil();
@@ -889,6 +2000,7 @@ class JogoGorilas {
         }
 
         this.desenharAnimacaoAcerto();
+        this.ctx.restore();
     }
 
     desenharBannerPlacar() {
@@ -953,30 +2065,173 @@ class JogoGorilas {
             this.ctx.arc(areaSol.x, areaSol.y, areaSol.raio * 4, 0, Math.PI * 2);
             this.ctx.fill();
         }
+
+        this.desenharSkylineDistante();
+        this.desenharBrumaAtmosferica();
+    }
+
+    desenharSkylineDistante() {
+        const camadas = [
+            { faixa: this.city.fundoDistante, deslocamento: this.alturaTela * 0.05, nome: 'distante' },
+            { faixa: this.city.fundoMedio, deslocamento: this.alturaTela * 0.025, nome: 'medio' }
+        ];
+
+        camadas.forEach(({ faixa, deslocamento, nome }) => {
+            if (!faixa || faixa.length === 0) return;
+            this.ctx.save();
+            faixa.forEach((predio, indice) => {
+                const y = predio.yTopo + deslocamento + (indice % 2) * 8;
+                const estilo = this.obterEstiloPredioFundo(predio, indice, nome);
+                const frenteGrad = this.ctx.createLinearGradient(predio.x, y, predio.x, y + predio.altura);
+                frenteGrad.addColorStop(0, estilo.frenteTopo);
+                frenteGrad.addColorStop(1, estilo.frenteBase);
+                this.ctx.fillStyle = frenteGrad;
+                this.ctx.fillRect(predio.x, y, predio.largura, predio.altura);
+
+                this.ctx.fillStyle = estilo.lateral;
+                this.ctx.beginPath();
+                this.ctx.moveTo(predio.x + predio.largura, y);
+                this.ctx.lineTo(predio.x + predio.largura + estilo.profundidade, y - estilo.profundidade * 0.32);
+                this.ctx.lineTo(predio.x + predio.largura + estilo.profundidade, y + predio.altura - estilo.profundidade * 0.1);
+                this.ctx.lineTo(predio.x + predio.largura, y + predio.altura);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                this.ctx.fillStyle = estilo.topo;
+                this.ctx.beginPath();
+                this.ctx.moveTo(predio.x, y);
+                this.ctx.lineTo(predio.x + predio.largura, y);
+                this.ctx.lineTo(predio.x + predio.largura + estilo.profundidade, y - estilo.profundidade * 0.32);
+                this.ctx.lineTo(predio.x + estilo.profundidade * 0.45, y - estilo.profundidade * 0.32);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                if (predio.luzes?.length) {
+                    predio.luzes.forEach((luz) => {
+                        this.ctx.fillStyle = luz.intensidade > 0.4 ? estilo.janelaAcesa : estilo.janelaApagada;
+                        this.ctx.fillRect(luz.x, luz.y + deslocamento + (indice % 2) * 8, luz.largura, luz.altura);
+                    });
+                }
+            });
+            this.ctx.restore();
+        });
+    }
+
+    desenharBrumaAtmosferica() {
+        const grad = this.ctx.createLinearGradient(0, this.alturaTela * 0.48, 0, this.alturaTela);
+        grad.addColorStop(0, 'rgba(255, 195, 113, 0)');
+        grad.addColorStop(0.55, 'rgba(255, 158, 87, 0.08)');
+        grad.addColorStop(1, 'rgba(17, 24, 39, 0.2)');
+        this.ctx.fillStyle = grad;
+        this.ctx.fillRect(0, this.alturaTela * 0.4, this.larguraTela, this.alturaTela * 0.6);
+
+        const vinheta = this.ctx.createRadialGradient(
+            this.larguraTela * 0.5,
+            this.alturaTela * 0.45,
+            this.larguraTela * 0.2,
+            this.larguraTela * 0.5,
+            this.alturaTela * 0.5,
+            this.larguraTela * 0.75
+        );
+        vinheta.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vinheta.addColorStop(1, 'rgba(7, 10, 20, 0.22)');
+        this.ctx.fillStyle = vinheta;
+        this.ctx.fillRect(0, 0, this.larguraTela, this.alturaTela);
+
+        const tempo = Date.now() / 1000;
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.06;
+        for (let i = 0; i < 3; i += 1) {
+            const y = this.alturaTela * (0.58 + i * 0.08) + Math.sin(tempo * (0.35 + i * 0.08) + i) * 8;
+            const gradFaixa = this.ctx.createLinearGradient(0, y - 18, 0, y + 18);
+            gradFaixa.addColorStop(0, 'rgba(255, 196, 120, 0)');
+            gradFaixa.addColorStop(0.5, 'rgba(255, 196, 120, 0.9)');
+            gradFaixa.addColorStop(1, 'rgba(255, 196, 120, 0)');
+            this.ctx.fillStyle = gradFaixa;
+            this.ctx.fillRect(0, y - 18, this.larguraTela, 36);
+        }
+        this.ctx.restore();
     }
 
     desenharNuvens() {
         this.ctx.save();
-        this.nuvens.forEach(nuvem => {
-            const { x, y, larguraTotal } = nuvem;
-            
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.65)'; // Um pouco mais opacas para parecerem SVG
-            this.ctx.beginPath();
-            
-            // Desenho estilizado tipo SVG (base achatada e topos arredondados variados)
-            const base = y + 20;
-            const r = larguraTotal / 4;
-            
-            // Desenha a "fofura" da nuvem com arcos
-            this.ctx.moveTo(x - r, base);
-            this.ctx.arc(x - r, base - r * 0.6, r * 0.8, Math.PI * 0.5, Math.PI * 1.5);
-            this.ctx.arc(x, base - r * 1.2, r * 1.1, Math.PI * 1, Math.PI * 2);
-            this.ctx.arc(x + r * 1.2, base - r * 0.8, r * 0.9, Math.PI * 1.2, Math.PI * 0.3);
-            this.ctx.lineTo(x - r, base);
-            
-            // Sombra sutil na base para volume
+        const f = this.game.faseDia || 0;
+        const areaSol = this.obterAreaSol();
+        const tempo = performance.now() / 1000;
+
+        this.nuvens
+            .slice()
+            .sort((a, b) => (a.profundidade || 0) - (b.profundidade || 0))
+            .forEach(nuvem => {
+            const volumeFundo = nuvem.volumeFundo || {};
+            const volumeFrente = nuvem.volumeFrente || {};
+            const distanciaSol = Math.abs(nuvem.x - areaSol.x);
+            const influenciaSol = Math.max(0, 1 - distanciaSol / (this.larguraTela * 0.42)) * (1 - f) * (0.35 + nuvem.brilhoQuente * 0.65);
+            const deformacao = Math.sin(tempo * (0.32 + (nuvem.profundidade || 0) * 0.08) + nuvem.deformacaoFase);
+            const escalaX = (nuvem.escalaBaseX || 1) * (1 + deformacao * (nuvem.deformacaoAmplitudeX || 0));
+            const escalaY = (nuvem.escalaBaseY || 1) * (1 - deformacao * (nuvem.deformacaoAmplitudeY || 0));
+            const opacidade = nuvem.opacidadeBase * (1 - f * 0.38);
+            const sombraAlpha = 0.1 + (nuvem.profundidade || 0) * 0.04 + f * 0.06;
+            const fundoAlpha = 0.18 + (nuvem.profundidade || 0) * 0.08;
+            const brilhoSuperior = 0.72 + influenciaSol * 0.18 - f * 0.18;
+            const meioBranco = 0.68 - f * 0.18;
+            const baseFria = 0.56 - f * 0.12;
+
+            this.ctx.save();
+            this.ctx.globalAlpha = fundoAlpha * opacidade;
+            this.desenharFormaNuvem(this.ctx, nuvem, {
+                offsetX: volumeFundo.offsetX || -10,
+                offsetY: volumeFundo.offsetY || 8,
+                escalaX: (volumeFundo.escalaX || 0.8) * escalaX,
+                escalaY: (volumeFundo.escalaY || 0.82) * escalaY
+            });
+            this.ctx.fillStyle = `rgba(${180 - f * 34}, ${204 - f * 30}, ${236 - f * 18}, 0.92)`;
             this.ctx.fill();
-            this.ctx.fillStyle = 'rgba(200, 220, 255, 0.2)';
+            this.ctx.restore();
+
+            const grad = this.ctx.createLinearGradient(0, nuvem.y - nuvem.alturaTotal * 0.55, 0, nuvem.y + nuvem.alturaTotal * 0.5);
+            grad.addColorStop(0, `rgba(${255 - f * 28}, ${248 - f * 10}, ${236 + influenciaSol * 16}, ${brilhoSuperior})`);
+            grad.addColorStop(0.52, `rgba(${236 - f * 22}, ${242 - f * 16}, ${252 - f * 10}, ${meioBranco})`);
+            grad.addColorStop(1, `rgba(${188 - f * 20}, ${208 - f * 18}, ${238 - f * 10}, ${baseFria})`);
+
+            this.desenharFormaNuvem(this.ctx, nuvem, {
+                escalaX,
+                escalaY
+            });
+            this.ctx.fillStyle = grad;
+            this.ctx.shadowColor = `rgba(255, 220, 170, ${0.06 + influenciaSol * 0.12})`;
+            this.ctx.shadowBlur = 8 + (nuvem.profundidade || 0) * 2;
+            this.ctx.fill();
+
+            this.desenharFormaNuvem(this.ctx, nuvem, {
+                offsetX: volumeFrente.offsetX || nuvem.larguraTotal * 0.04,
+                offsetY: volumeFrente.offsetY || -nuvem.alturaTotal * 0.04,
+                escalaX: escalaX * (volumeFrente.escalaX || 0.64),
+                escalaY: escalaY * (volumeFrente.escalaY || 0.58)
+            });
+            const brilhoFrontal = this.ctx.createLinearGradient(
+                nuvem.x,
+                nuvem.y - nuvem.alturaTotal * 0.36,
+                nuvem.x + nuvem.larguraTotal * 0.16,
+                nuvem.y + nuvem.alturaTotal * 0.12
+            );
+            brilhoFrontal.addColorStop(0, `rgba(255, 246, 232, ${volumeFrente.alpha + influenciaSol * 0.12})`);
+            brilhoFrontal.addColorStop(1, 'rgba(255,255,255,0)');
+            this.ctx.fillStyle = brilhoFrontal;
+            this.ctx.shadowBlur = 0;
+            this.ctx.fill();
+
+            this.desenharFormaNuvem(this.ctx, nuvem, {
+                offsetX: -nuvem.larguraTotal * (0.04 + (nuvem.profundidade || 0) * 0.01),
+                offsetY: nuvem.alturaTotal * (0.02 + (nuvem.profundidade || 0) * 0.008),
+                escalaX: escalaX * 0.9,
+                escalaY: escalaY * 0.86
+            });
+            const sombra = this.ctx.createLinearGradient(0, nuvem.y, 0, nuvem.y + nuvem.alturaTotal * 0.48);
+            sombra.addColorStop(0, 'rgba(255,255,255,0)');
+            sombra.addColorStop(1, `rgba(${150 - f * 18}, ${176 - f * 20}, ${216 - f * 12}, ${sombraAlpha})`);
+            this.ctx.fillStyle = sombra;
+            this.ctx.shadowBlur = 0;
             this.ctx.fill();
         });
         this.ctx.restore();
@@ -984,22 +2239,45 @@ class JogoGorilas {
 
     desenharCidade() {
         this.ctx.drawImage(this.bufferCidade, 0, 0);
+        this.desenharPrimeiroPlano();
+    }
+
+    desenharPrimeiroPlano() {
+        if (!this.city.primeiroPlano || this.city.primeiroPlano.length === 0) return;
+
+        this.ctx.save();
+        this.ctx.fillStyle = 'rgba(9, 14, 26, 0.72)';
+        this.city.primeiroPlano.forEach((item, indice) => {
+            const y = this.alturaTela - item.altura * 0.7;
+            const largura = item.largura * 0.72;
+            this.ctx.fillRect(item.x + (indice % 3) * 5, y, largura, item.altura);
+        });
+        this.ctx.fillStyle = 'rgba(255, 190, 120, 0.05)';
+        this.city.primeiroPlano.forEach((item, indice) => {
+            const y = this.alturaTela - item.altura * 0.7;
+            const largura = item.largura * 0.72;
+            this.ctx.fillRect(item.x + (indice % 3) * 5, y, Math.max(2, largura * 0.08), item.altura);
+        });
+        this.ctx.restore();
     }
 
     desenharGorilas() {
         if (this.animacaoAcerto) {
-            // Dança da Vitória: 30% da velocidade anterior (0.08 -> 0.27s por pose)
             const poseVencedor = Math.floor(this.animacaoAcerto.tempo / 0.27) % 2 === 0 ? 'bracoEsquerdo' : 'bracoDireito';
             const vencedor = this.animacaoAcerto.vencedor;
+            const impulso = Math.abs(Math.sin(this.animacaoAcerto.tempo * 8.5));
 
-            this.desenharGorila(vencedor, poseVencedor);
+            this.desenharGorila(vencedor, poseVencedor, {
+                deslocamentoYExtra: -impulso * 10,
+                escalaExtra: 1 + impulso * 0.05
+            });
 
             // O perdedor some na explosão instantaneamente (como no original)
             return;
         }
 
-        this.desenharGorila(1, this.game.jogadorAtual === 1 && !this.projectile.ativo ? 'bracoEsquerdo' : 'normal');
-        this.desenharGorila(2, this.game.jogadorAtual === 2 && !this.projectile.ativo ? 'bracoDireito' : 'normal');
+        this.desenharGorila(1, 'normal');
+        this.desenharGorila(2, 'normal');
     }
 
     desenharProjetil() {
@@ -1007,10 +2285,26 @@ class JogoGorilas {
             return;
         }
 
+        const anguloMovimento = Math.atan2(
+            -(this.projectile.velocidadeY - (this.game.gravidade * this.escalaFisica.gravidade * this.projectile.tempoVoo)),
+            this.projectile.velocidadeX + (this.game.vento * this.escalaFisica.vento * this.projectile.tempoVoo)
+        );
+        const rastroBrilho = this.rastro[this.rastro.length - 1];
+        if (rastroBrilho) {
+            this.ctx.save();
+            this.ctx.globalAlpha = 0.22;
+            this.ctx.fillStyle = 'rgba(255, 214, 122, 0.9)';
+            this.ctx.beginPath();
+            this.ctx.ellipse(rastroBrilho.x, rastroBrilho.y, 7, 4, anguloMovimento, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.restore();
+        }
+
         this.desenharBanana(
             this.projectile.x - this.sprites.banana.larguraQuadro / 2,
             this.projectile.y - this.sprites.banana.alturaQuadro / 2,
-            this.projectile.rotacao
+            this.projectile.rotacao,
+            anguloMovimento
         );
     }
 
@@ -1018,23 +2312,6 @@ class JogoGorilas {
         if (!this.animacaoAcerto) {
             return;
         }
-
-        const progresso = this.animacaoAcerto.tempo / this.animacaoAcerto.duracao;
-        const raioBase = this.escalaFisica.raioExplosao * (0.5 + progresso * 0.9);
-
-        this.ctx.save();
-        this.ctx.globalAlpha = Math.max(0.15, 1 - progresso * 0.7);
-        this.ctx.fillStyle = '#f5c542';
-        this.ctx.beginPath();
-        this.ctx.arc(this.animacaoAcerto.x, this.animacaoAcerto.y, raioBase, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        this.ctx.strokeStyle = '#ff7b00';
-        this.ctx.lineWidth = 4;
-        this.ctx.beginPath();
-        this.ctx.arc(this.animacaoAcerto.x, this.animacaoAcerto.y, raioBase * 0.65, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.restore();
     }
 
     desenharSol(expressao = 'sorrindo') {
@@ -1062,27 +2339,96 @@ class JogoGorilas {
         this.ctx.restore();
     }
 
-    desenharGorila(jogador, pose = 'normal') {
+    desenharGorila(jogador, pose = 'normal', opcoes = {}) {
         const gorila = this.sprites.gorila;
         const posicao = this.gorilas[jogador];
-        const quadroX = gorila.poses[pose] * gorila.larguraQuadro;
+        const largura = posicao.largura || gorila.larguraQuadro;
+        const altura = posicao.altura || gorila.alturaQuadro;
+        const efeitoLancamento = this.efeitoLancamento && this.efeitoLancamento.jogador === jogador
+            ? this.efeitoLancamento
+            : null;
+        const progressoLancamento = efeitoLancamento
+            ? Math.min(1, efeitoLancamento.tempo / efeitoLancamento.duracao)
+            : 0;
+        const recuo = efeitoLancamento
+            ? Math.sin(progressoLancamento * Math.PI) * 8
+            : 0;
+        const deslocamentoX = jogador === 1 ? -recuo : recuo;
+        const deslocamentoY = efeitoLancamento ? -Math.sin(progressoLancamento * Math.PI) * 3 : 0;
+        const poseRender = efeitoLancamento
+            ? (jogador === 1 ? 'bracoDireito' : 'bracoEsquerdo')
+            : pose;
+        const idleAtivo = !this.projectile.ativo && !this.animacaoAcerto;
+        const idlePulso = idleAtivo ? Math.sin(Date.now() / 520 + jogador * 0.9) : 0;
+        const idleY = idleAtivo ? Math.max(0, idlePulso) * 0.65 : 0;
+        const idleScale = idleAtivo ? 1 + Math.max(0, idlePulso) * 0.005 : 1;
+        const esquivaAtiva = this.feedbackDuelo && this.feedbackDuelo.jogador === jogador;
+        const esquivaPulso = esquivaAtiva ? Math.sin((0.55 - this.feedbackDuelo.tempo) * 18) : 0;
+        const escalaFinal = idleScale * (opcoes.escalaExtra || 1);
+        const larguraFinal = largura * escalaFinal;
+        const alturaFinal = altura * escalaFinal;
+        const esquivaX = esquivaAtiva ? (jogador === 1 ? -1 : 1) * esquivaPulso * 4 : 0;
+        const esquivaY = esquivaAtiva ? Math.abs(esquivaPulso) * 3 : 0;
+        const xFinal = posicao.x + deslocamentoX + esquivaX - (larguraFinal - largura) / 2;
+        const yFinal = posicao.y + deslocamentoY + idleY + esquivaY + (opcoes.deslocamentoYExtra || 0) - (alturaFinal - altura);
+        const elevacaoVisual = Math.max(0, (posicao.y + posicao.altura) - (yFinal + alturaFinal));
+
+        this.desenharSombraGorila({
+            ...posicao,
+            x: posicao.x + deslocamentoX * 0.18,
+            y: posicao.y,
+            largura: largura,
+            altura: altura,
+            elevacaoVisual
+        });
 
         this.ctx.drawImage(
             gorila.imagem,
-            quadroX,
+            gorila.poses[poseRender] * gorila.larguraQuadro,
             0,
             gorila.larguraQuadro,
             gorila.alturaQuadro,
-            posicao.x,
-            posicao.y,
-            gorila.larguraQuadro,
-            gorila.alturaQuadro
+            xFinal,
+            yFinal,
+            larguraFinal,
+            alturaFinal
         );
     }
 
-    desenharBanana(x, y, rotacao) {
+    desenharSombraGorila(posicao) {
+        const centroX = posicao.x + posicao.largura / 2;
+        const baseY = posicao.y + posicao.altura - 2;
+        const elevacao = posicao.elevacaoVisual || 0;
+        const escalaX = Math.max(0.72, 1 - elevacao * 0.035);
+        const escalaY = Math.max(0.6, 1 - elevacao * 0.05);
+        this.ctx.save();
+        this.ctx.fillStyle = `rgba(7, 10, 20, ${Math.max(0.16, 0.28 - elevacao * 0.02)})`;
+        this.ctx.beginPath();
+        this.ctx.ellipse(
+            centroX,
+            baseY,
+            posicao.largura * 0.24 * escalaX,
+            posicao.altura * 0.08 * escalaY,
+            0,
+            0,
+            Math.PI * 2
+        );
+        this.ctx.fill();
+        this.ctx.restore();
+    }
+
+    desenharBanana(x, y, rotacao, anguloMovimento = 0) {
         const banana = this.sprites.banana;
         const quadroX = rotacao * banana.larguraQuadro;
+        const centroX = x + banana.larguraQuadro / 2;
+        const centroY = y + banana.alturaQuadro / 2;
+
+        this.ctx.save();
+        this.ctx.translate(centroX, centroY);
+        this.ctx.rotate(anguloMovimento * 0.18);
+        this.ctx.fillStyle = 'rgba(98, 63, 18, 0.22)';
+        this.ctx.fillRect(-8, 7, 16, 4);
+        this.ctx.restore();
 
         this.ctx.drawImage(
             banana.imagem,
@@ -1211,6 +2557,11 @@ class JogoGorilas {
         const origem = this.obterOrigemArremesso(2);
         const anguloRad = (angulo * Math.PI) / 180;
         const velEscalada = velocidade * this.escalaFisica.velocidade;
+        this.efeitoLancamento = {
+            jogador: 2,
+            tempo: 0,
+            duracao: 0.18
+        };
 
         this.projectile = {
             ativo: true,
@@ -1225,7 +2576,8 @@ class JogoGorilas {
             tempoVoo: 0,
             x: origem.x,
             y: origem.y,
-            rotacao: 0
+            rotacao: 0,
+            quaseAcertoDisparado: false
         };
     }
 
@@ -1234,15 +2586,41 @@ class JogoGorilas {
     desenharRastro() {
         if (this.rastro.length < 2) return;
         this.ctx.save();
-        this.ctx.setLineDash([4, 7]);
-        this.ctx.strokeStyle = 'rgba(251,146,60,0.45)';
-        this.ctx.lineWidth = 1.5;
-        this.ctx.beginPath();
-        this.ctx.moveTo(this.rastro[0].x, this.rastro[0].y);
+        this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
+
         for (let i = 1; i < this.rastro.length; i++) {
-            this.ctx.lineTo(this.rastro[i].x, this.rastro[i].y);
+            const anterior = this.rastro[i - 1];
+            const atual = this.rastro[i];
+            const progressoIdade = 1 - ((anterior.vida + atual.vida) * 0.5) / 0.52;
+            const alphaBase = Math.max(0, Math.min(1, progressoIdade));
+            if (alphaBase <= 0) continue;
+
+            this.ctx.strokeStyle = `rgba(251, 146, 60, ${0.34 * alphaBase})`;
+            this.ctx.lineWidth = 5 * alphaBase;
+            this.ctx.beginPath();
+            this.ctx.moveTo(anterior.x, anterior.y);
+            this.ctx.lineTo(atual.x, atual.y);
+            this.ctx.stroke();
+
+            this.ctx.strokeStyle = `rgba(255, 236, 179, ${0.52 * alphaBase})`;
+            this.ctx.lineWidth = Math.max(0.6, 1.25 * alphaBase);
+            this.ctx.beginPath();
+            this.ctx.moveTo(anterior.x, anterior.y);
+            this.ctx.lineTo(atual.x, atual.y);
+            this.ctx.stroke();
         }
-        this.ctx.stroke();
+
+        for (let i = 1; i < this.rastro.length; i += 2) {
+            const ponto = this.rastro[i];
+            const progressoIdade = 1 - (ponto.vida / 0.52);
+            const alpha = Math.max(0, Math.min(0.28, progressoIdade * 0.28));
+            if (alpha <= 0) continue;
+            this.ctx.fillStyle = `rgba(255, 214, 122, ${alpha})`;
+            this.ctx.beginPath();
+            this.ctx.ellipse(ponto.x, ponto.y, 2.8, 1.8, 0, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
         this.ctx.restore();
     }
 
@@ -1280,55 +2658,97 @@ class JogoGorilas {
 
         this.ctx.save();
         this.ctx.setLineDash([3, 9]);
-        this.ctx.strokeStyle = 'rgba(245,158,11,0.3)';
-        this.ctx.lineWidth = 1.5;
+        this.ctx.strokeStyle = 'rgba(245,158,11,0.38)';
+        this.ctx.lineWidth = 1.8;
         this.ctx.beginPath();
         this.ctx.moveTo(pontos[0].x, pontos[0].y);
         pontos.forEach(p => this.ctx.lineTo(p.x, p.y));
         this.ctx.stroke();
-        // Ponto final
-        const fim = pontos[pontos.length - 1];
-        this.ctx.setLineDash([]);
-        this.ctx.fillStyle = 'rgba(245,158,11,0.45)';
-        this.ctx.beginPath();
-        this.ctx.arc(fim.x, fim.y, 3, 0, Math.PI * 2);
-        this.ctx.fill();
         this.ctx.restore();
     }
 
     // --- PARTÍCULAS ---
 
     spawnarParticulas(x, y, tipo) {
-        const count = tipo === 'gorila' ? 22 : 14;
-        const paletas = {
-            gorila: ['#f59e0b', '#ff7b00', '#ef4444', '#fbbf24', '#fff'],
-            predio: ['#6b7280', '#9ca3af', '#f59e0b', '#fb923c', '#d1d5db']
+        const configuracoes = {
+            gorila: {
+                count: 34,
+                detritos: ['#f59e0b', '#ff7b00', '#ef4444', '#fbbf24', '#fff4d6'],
+                fumaca: ['rgba(255,196,120,0.55)', 'rgba(255,122,0,0.3)', 'rgba(82,24,12,0.26)'],
+                velocidadeBase: 90,
+                velocidadeExtra: 135,
+                gravidade: 180
+            },
+            predio: {
+                count: 22,
+                detritos: ['#5b6474', '#7c8798', '#9ca3af', '#d1d5db', '#fb923c'],
+                fumaca: ['rgba(148,163,184,0.24)', 'rgba(51,65,85,0.22)', 'rgba(249,115,22,0.18)'],
+                velocidadeBase: 65,
+                velocidadeExtra: 95,
+                gravidade: 240
+            }
         };
-        const cores = paletas[tipo] || paletas.predio;
+        const cfg = configuracoes[tipo] || configuracoes.predio;
 
-        for (let i = 0; i < count; i++) {
-            const ang = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.8;
-            const vel = 60 + Math.random() * 110;
+        for (let i = 0; i < cfg.count; i++) {
+            const ang = (Math.PI * 2 * i) / cfg.count + (Math.random() - 0.5) * 0.9;
+            const vel = cfg.velocidadeBase + Math.random() * cfg.velocidadeExtra;
             this.particulas.push({
+                tipo: 'detrito',
                 x, y,
                 vx: Math.cos(ang) * vel,
                 vy: Math.sin(ang) * vel - 40,
                 vida: 0,
-                vidaMax: 0.4 + Math.random() * 0.5,
-                cor: cores[Math.floor(Math.random() * cores.length)],
-                raio: 2 + Math.random() * 4
+                vidaMax: 0.38 + Math.random() * 0.46,
+                cor: cfg.detritos[Math.floor(Math.random() * cfg.detritos.length)],
+                raio: 2 + Math.random() * 4,
+                gravidade: cfg.gravidade,
+                rotacao: Math.random() * Math.PI * 2,
+                spin: (Math.random() * 2 - 1) * 10
             });
         }
+
+        const fumacaCount = tipo === 'gorila' ? 10 : 8;
+        for (let i = 0; i < fumacaCount; i++) {
+            this.particulas.push({
+                tipo: 'fumaca',
+                x: x + (Math.random() * 2 - 1) * 8,
+                y: y + (Math.random() * 2 - 1) * 8,
+                vx: (Math.random() * 2 - 1) * 24,
+                vy: -25 - Math.random() * 30,
+                vida: 0,
+                vidaMax: 0.45 + Math.random() * 0.35,
+                cor: cfg.fumaca[Math.floor(Math.random() * cfg.fumaca.length)],
+                raio: 10 + Math.random() * 16,
+                gravidade: -18,
+                crescimento: 18 + Math.random() * 18
+            });
+        }
+
+        this.particulas.push({
+            tipo: 'flash',
+            x,
+            y,
+            vx: 0,
+            vy: 0,
+            vida: 0,
+            vidaMax: tipo === 'gorila' ? 0.18 : 0.12,
+            cor: tipo === 'gorila' ? 'rgba(255,244,214,0.9)' : 'rgba(255,214,122,0.55)',
+            raio: tipo === 'gorila' ? 30 : 22,
+            gravidade: 0
+        });
     }
 
     atualizarParticulas(delta) {
         if (this.particulas.length === 0) return;
-        const grav = 220;
         this.particulas = this.particulas.filter(p => {
             p.vida += delta;
             p.x += p.vx * delta;
             p.y += p.vy * delta;
-            p.vy += grav * delta;
+            p.vy += (p.gravidade ?? 220) * delta;
+            if (p.tipo === 'detrito') {
+                p.rotacao += (p.spin || 0) * delta;
+            }
             return p.vida < p.vidaMax;
         });
     }
@@ -1338,11 +2758,197 @@ class JogoGorilas {
         this.ctx.save();
         this.particulas.forEach(p => {
             const alpha = 1 - p.vida / p.vidaMax;
+            if (p.tipo === 'fumaca') {
+                const raio = p.raio + (p.crescimento || 0) * (p.vida / p.vidaMax);
+                this.ctx.globalAlpha = alpha * 0.65;
+                this.ctx.fillStyle = p.cor;
+                this.ctx.beginPath();
+                this.ctx.ellipse(p.x, p.y, raio, raio * 0.72, 0, 0, Math.PI * 2);
+                this.ctx.fill();
+                return;
+            }
+
+            if (p.tipo === 'flash') {
+                this.ctx.globalAlpha = alpha * 0.9;
+                this.ctx.fillStyle = p.cor;
+                this.ctx.beginPath();
+                this.ctx.arc(p.x, p.y, p.raio * (0.35 + (p.vida / p.vidaMax) * 0.85), 0, Math.PI * 2);
+                this.ctx.fill();
+                return;
+            }
+
+            this.ctx.save();
+            this.ctx.translate(p.x, p.y);
+            this.ctx.rotate(p.rotacao || 0);
             this.ctx.globalAlpha = alpha;
             this.ctx.fillStyle = p.cor;
-            this.ctx.beginPath();
-            this.ctx.arc(p.x, p.y, p.raio * alpha + 0.5, 0, Math.PI * 2);
-            this.ctx.fill();
+            const largura = Math.max(1.5, p.raio * (0.8 + alpha * 0.45));
+            const altura = Math.max(1.5, p.raio * (0.55 + alpha * 0.25));
+            this.ctx.fillRect(-largura / 2, -altura / 2, largura, altura);
+            this.ctx.restore();
+        });
+        this.ctx.restore();
+    }
+
+    spawnarImpactoVisual(x, y, tipo) {
+        const configuracoes = {
+            predio: {
+                ring: { cor: 'rgba(255, 179, 92, 0.6)', raio: 16, crescimento: 142, vida: 0.34, espessura: 5.5 },
+                glow: { cor: 'rgba(255, 162, 82, 0.34)', raio: 22, crescimento: 96, vida: 0.28 },
+                poeira: { count: 7, cor: 'rgba(179, 154, 132, 0.16)', raio: [15, 26], crescimento: [16, 30], vx: 36, vy: 28, vida: [0.34, 0.58] },
+                streaks: 6
+            },
+            gorila: {
+                ring: { cor: 'rgba(255, 238, 185, 0.85)', raio: 18, crescimento: 190, vida: 0.42, espessura: 6.5 },
+                glow: { cor: 'rgba(255, 196, 112, 0.42)', raio: 28, crescimento: 132, vida: 0.36 },
+                poeira: { count: 10, cor: 'rgba(255, 158, 102, 0.18)', raio: [18, 34], crescimento: [22, 38], vx: 52, vy: 36, vida: [0.42, 0.7] },
+                streaks: 9
+            },
+            sol: {
+                ring: { cor: 'rgba(255, 247, 170, 0.8)', raio: 15, crescimento: 158, vida: 0.32, espessura: 4.5 },
+                glow: { cor: 'rgba(255, 210, 84, 0.36)', raio: 24, crescimento: 116, vida: 0.3 },
+                poeira: { count: 5, cor: 'rgba(255, 222, 128, 0.12)', raio: [12, 20], crescimento: [12, 22], vx: 28, vy: 18, vida: [0.22, 0.4] },
+                streaks: 4
+            }
+        };
+        const cfg = configuracoes[tipo] || configuracoes.predio;
+
+        this.impactosVisuais.push({
+            tipo: 'ring',
+            x,
+            y,
+            vida: 0,
+            vidaMax: cfg.ring.vida,
+            raio: cfg.ring.raio,
+            crescimento: cfg.ring.crescimento,
+            cor: cfg.ring.cor,
+            espessura: cfg.ring.espessura
+        });
+
+        this.impactosVisuais.push({
+            tipo: 'glow',
+            x,
+            y,
+            vida: 0,
+            vidaMax: cfg.glow.vida,
+            raio: cfg.glow.raio,
+            crescimento: cfg.glow.crescimento,
+            cor: cfg.glow.cor
+        });
+
+        for (let i = 0; i < cfg.streaks; i += 1) {
+            const angulo = (Math.PI * 2 * i) / cfg.streaks + (Math.random() - 0.5) * 0.5;
+            this.impactosVisuais.push({
+                tipo: 'streak',
+                x,
+                y,
+                vida: 0,
+                vidaMax: 0.14 + Math.random() * 0.12,
+                comprimento: 12 + Math.random() * (tipo === 'gorila' ? 24 : 18),
+                espessura: 2 + Math.random() * 2.4,
+                angulo,
+                cor: tipo === 'predio'
+                    ? 'rgba(255, 210, 154, 0.72)'
+                    : tipo === 'sol'
+                        ? 'rgba(255, 248, 176, 0.86)'
+                        : 'rgba(255, 244, 214, 0.88)'
+            });
+        }
+
+        for (let i = 0; i < cfg.poeira.count; i += 1) {
+            this.impactosVisuais.push({
+                tipo: 'poeira',
+                x: x + (Math.random() * 2 - 1) * 6,
+                y: y + (Math.random() * 2 - 1) * 5,
+                vida: 0,
+                vidaMax: cfg.poeira.vida[0] + Math.random() * (cfg.poeira.vida[1] - cfg.poeira.vida[0]),
+                raio: cfg.poeira.raio[0] + Math.random() * (cfg.poeira.raio[1] - cfg.poeira.raio[0]),
+                crescimento: cfg.poeira.crescimento[0] + Math.random() * (cfg.poeira.crescimento[1] - cfg.poeira.crescimento[0]),
+                vx: (Math.random() * 2 - 1) * cfg.poeira.vx,
+                vy: -Math.random() * cfg.poeira.vy,
+                cor: cfg.poeira.cor
+            });
+        }
+    }
+
+    atualizarImpactosVisuais(delta) {
+        if (this.impactosVisuais.length === 0) return;
+
+        this.impactosVisuais = this.impactosVisuais.filter((impacto) => {
+            impacto.vida += delta;
+            if (impacto.vx) impacto.x += impacto.vx * delta;
+            if (impacto.vy) {
+                impacto.y += impacto.vy * delta;
+                impacto.vy += 26 * delta;
+            }
+
+            return impacto.vida < impacto.vidaMax;
+        });
+    }
+
+    desenharImpactosVisuais() {
+        if (this.impactosVisuais.length === 0) return;
+
+        this.ctx.save();
+        this.impactosVisuais.forEach((impacto) => {
+            const progresso = impacto.vida / impacto.vidaMax;
+            const alpha = Math.max(0, 1 - progresso);
+
+            if (impacto.tipo === 'ring') {
+                const raio = impacto.raio + impacto.crescimento * progresso;
+                this.ctx.save();
+                this.ctx.globalAlpha = alpha * 0.95;
+                this.ctx.strokeStyle = impacto.cor;
+                this.ctx.lineWidth = Math.max(1.1, impacto.espessura * (1 - progresso * 0.72));
+                this.ctx.beginPath();
+                this.ctx.arc(impacto.x, impacto.y, raio, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.restore();
+                return;
+            }
+
+            if (impacto.tipo === 'glow') {
+                const raio = impacto.raio + impacto.crescimento * progresso;
+                const glow = this.ctx.createRadialGradient(impacto.x, impacto.y, 0, impacto.x, impacto.y, raio);
+                glow.addColorStop(0, impacto.cor);
+                glow.addColorStop(0.45, impacto.cor.replace(/[\d\.]+\)$/, `${(0.22 + alpha * 0.18).toFixed(3)})`));
+                glow.addColorStop(1, 'rgba(255,255,255,0)');
+                this.ctx.save();
+                this.ctx.globalAlpha = alpha * 0.75;
+                this.ctx.fillStyle = glow;
+                this.ctx.beginPath();
+                this.ctx.arc(impacto.x, impacto.y, raio, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+                return;
+            }
+
+            if (impacto.tipo === 'poeira') {
+                const raio = impacto.raio + impacto.crescimento * progresso;
+                this.ctx.save();
+                this.ctx.globalAlpha = alpha * 0.5;
+                this.ctx.fillStyle = impacto.cor;
+                this.ctx.beginPath();
+                this.ctx.ellipse(impacto.x, impacto.y, raio, raio * 0.58, 0, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+                return;
+            }
+
+            if (impacto.tipo === 'streak') {
+                const comprimento = impacto.comprimento * (1 + progresso * 0.45);
+                const dx = Math.cos(impacto.angulo) * comprimento;
+                const dy = Math.sin(impacto.angulo) * comprimento;
+                this.ctx.save();
+                this.ctx.globalAlpha = alpha * 0.82;
+                this.ctx.strokeStyle = impacto.cor;
+                this.ctx.lineWidth = Math.max(0.8, impacto.espessura * (1 - progresso * 0.55));
+                this.ctx.beginPath();
+                this.ctx.moveTo(impacto.x, impacto.y);
+                this.ctx.lineTo(impacto.x + dx, impacto.y + dy);
+                this.ctx.stroke();
+                this.ctx.restore();
+            }
         });
         this.ctx.restore();
     }
@@ -1419,42 +3025,92 @@ class JogoGorilas {
         try {
             this.iniciarAudioCtx();
             const ctx = this.audioCtx;
+            const t = ctx.currentTime;
+
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
             gain.connect(ctx.destination);
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(180, ctx.currentTime);
-            osc.frequency.linearRampToValueAtTime(520, ctx.currentTime + 0.12);
-            gain.gain.setValueAtTime(0.18, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.22);
-        } catch (_) { /* AudioContext pode estar bloqueado */ }
-    }
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(190, t);
+            osc.frequency.exponentialRampToValueAtTime(560, t + 0.13);
+            gain.gain.setValueAtTime(0.16, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            osc.start(t);
+            osc.stop(t + 0.2);
 
-    tocarSomExplosao() {
-        try {
-            this.iniciarAudioCtx();
-            const ctx = this.audioCtx;
-            const bufSize = Math.floor(ctx.sampleRate * 0.35);
+            const whoosh = ctx.createBufferSource();
+            const bufSize = Math.floor(ctx.sampleRate * 0.12);
             const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
             const data = buf.getChannelData(0);
             for (let i = 0; i < bufSize; i++) {
-                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 1.8);
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 2.2);
+            }
+            const filt = ctx.createBiquadFilter();
+            filt.type = 'bandpass';
+            filt.frequency.setValueAtTime(900, t);
+            filt.Q.value = 0.8;
+            const whooshGain = ctx.createGain();
+            whooshGain.gain.setValueAtTime(0.04, t);
+            whooshGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+            whoosh.buffer = buf;
+            whoosh.connect(filt);
+            filt.connect(whooshGain);
+            whooshGain.connect(ctx.destination);
+            whoosh.start(t);
+        } catch (_) { /* AudioContext pode estar bloqueado */ }
+    }
+
+    tocarSomExplosao(tipo = 'predio') {
+        try {
+            this.iniciarAudioCtx();
+            const ctx = this.audioCtx;
+            const explosaoGorila = tipo === 'gorila';
+            const bufSize = Math.floor(ctx.sampleRate * (explosaoGorila ? 0.42 : 0.3));
+            const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+            const data = buf.getChannelData(0);
+            for (let i = 0; i < bufSize; i++) {
+                const queda = Math.pow(1 - i / bufSize, explosaoGorila ? 1.45 : 1.9);
+                data[i] = (Math.random() * 2 - 1) * queda;
             }
             const src = ctx.createBufferSource();
             src.buffer = buf;
             const filt = ctx.createBiquadFilter();
             filt.type = 'lowpass';
-            filt.frequency.value = 380;
+            filt.frequency.value = explosaoGorila ? 520 : 340;
             const gain = ctx.createGain();
-            gain.gain.setValueAtTime(0.9, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            gain.gain.setValueAtTime(explosaoGorila ? 1.05 : 0.82, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (explosaoGorila ? 0.55 : 0.4));
             src.connect(filt);
             filt.connect(gain);
             gain.connect(ctx.destination);
             src.start();
+
+            if (explosaoGorila) {
+                const ring = ctx.createOscillator();
+                const ringGain = ctx.createGain();
+                ring.type = 'triangle';
+                ring.frequency.setValueAtTime(140, ctx.currentTime);
+                ring.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.16);
+                ringGain.gain.setValueAtTime(0.08, ctx.currentTime);
+                ringGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+                ring.connect(ringGain);
+                ringGain.connect(ctx.destination);
+                ring.start(ctx.currentTime);
+                ring.stop(ctx.currentTime + 0.18);
+            } else {
+                const debris = ctx.createOscillator();
+                const debrisGain = ctx.createGain();
+                debris.type = 'square';
+                debris.frequency.setValueAtTime(95, ctx.currentTime);
+                debris.frequency.exponentialRampToValueAtTime(48, ctx.currentTime + 0.12);
+                debrisGain.gain.setValueAtTime(0.03, ctx.currentTime);
+                debrisGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+                debris.connect(debrisGain);
+                debrisGain.connect(ctx.destination);
+                debris.start(ctx.currentTime);
+                debris.stop(ctx.currentTime + 0.12);
+            }
         } catch (_) { /* ignorar */ }
     }
 
@@ -1475,6 +3131,25 @@ class JogoGorilas {
                 osc.start(t);
                 osc.stop(t + 0.28);
             });
+        } catch (_) { /* ignorar */ }
+    }
+
+    tocarSomQuaseAcerto() {
+        try {
+            this.iniciarAudioCtx();
+            const ctx = this.audioCtx;
+            const t = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(780, t);
+            osc.frequency.exponentialRampToValueAtTime(430, t + 0.08);
+            gain.gain.setValueAtTime(0.045, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.09);
         } catch (_) { /* ignorar */ }
     }
 
