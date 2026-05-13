@@ -33,6 +33,7 @@ class JogoGorilas {
     }
 
     inicializarEstado() {
+        this.cenasDoDia = this.criarCenasDoDia();
         this.assetsCarregados = false;
         this.anguloAtual = 45;
         this.velocidadeAtual = 50;
@@ -47,6 +48,10 @@ class JogoGorilas {
         this.screenShake = { tempo: 0, duracao: 0, forca: 0, x: 0, y: 0 };
         this.estrelas = [];
         this.audioCtx = null;
+        this.audioMasterGain = null;
+        this.audioSfxGain = null;
+        this.audioAmbienceGain = null;
+        this.menuAmbience = null;
         this.viewportCompativel = true;
 
         this.game = {
@@ -54,13 +59,13 @@ class JogoGorilas {
             jogadorAtual: 1,
             gravidade: 9.8,
             vento: 0,
-            solAtingido: false,
+            astroAtingido: false,
             ultimoTempo: 0,
             modoIA: false,
             dificuldadeIA: 'medio',
             mostrarTrajetoria: true,
-            faseDia: 0,
             rodada: 0,
+            indiceCenaDoDia: 0,
             cpuPensando: false
         };
 
@@ -83,6 +88,7 @@ class JogoGorilas {
 
         this.nuvens = [];
         this.menuSkyline = [];
+        this.menuNuvens = [];
         this.menuRuas = [];
         this.menuCarros = [];
         this.projectile = this.criarEstadoProjetil();
@@ -116,26 +122,150 @@ class JogoGorilas {
         };
     }
 
+    criarCenasDoDia() {
+        return [
+            {
+                id: '16:00',
+                titulo: 'Tarde',
+                astro: 'sol',
+                astroPos: { x: 0.72, y: 0.19 },
+                sky: ['#2457a6', '#4f8ef7', '#f7ae64', '#f28a63'],
+                nightFactor: 0.1,
+                stars: 0,
+                astroGlow: 0.34,
+                horizonGlow: 0.18
+            },
+            {
+                id: '18:00',
+                titulo: 'Por do Sol',
+                astro: 'sol',
+                astroPos: { x: 0.83, y: 0.38 },
+                sky: ['#1f3f82', '#4e6cc9', '#ffaf65', '#ff7f5f'],
+                nightFactor: 0.22,
+                stars: 0.02,
+                astroGlow: 0.44,
+                horizonGlow: 0.34
+            },
+            {
+                id: '19:00',
+                titulo: 'Crepusculo',
+                astro: 'nenhum',
+                astroPos: { x: 0.86, y: 0.42 },
+                sky: ['#173469', '#375caa', '#9b6687', '#4f4363'],
+                nightFactor: 0.48,
+                stars: 0.18,
+                astroGlow: 0,
+                horizonGlow: 0.24
+            },
+            {
+                id: '21:00',
+                titulo: 'Noite',
+                astro: 'lua',
+                astroPos: { x: 0.74, y: 0.2 },
+                sky: ['#07142a', '#16376d', '#294b93', '#4f4d72'],
+                nightFactor: 0.78,
+                stars: 0.62,
+                astroGlow: 0.18,
+                horizonGlow: 0.08
+            },
+            {
+                id: '00:00',
+                titulo: 'Madrugada',
+                astro: 'lua',
+                astroPos: { x: 0.48, y: 0.13 },
+                sky: ['#040a17', '#0b1d40', '#183565', '#2f3f69'],
+                nightFactor: 1,
+                stars: 0.92,
+                astroGlow: 0.12,
+                horizonGlow: 0.02
+            },
+            {
+                id: '04:30',
+                titulo: 'Pre Amanhecer',
+                astro: 'lua',
+                astroPos: { x: 0.18, y: 0.24 },
+                sky: ['#06101e', '#12284f', '#294063', '#4d5676'],
+                nightFactor: 0.88,
+                stars: 0.58,
+                astroGlow: 0.1,
+                horizonGlow: 0.1
+            },
+            {
+                id: '06:00',
+                titulo: 'Amanhecer',
+                astro: 'nenhum',
+                astroPos: { x: 0.14, y: 0.44 },
+                sky: ['#183163', '#4d77b8', '#f4b68c', '#e8a28a'],
+                nightFactor: 0.3,
+                stars: 0.08,
+                astroGlow: 0,
+                horizonGlow: 0.32
+            },
+            {
+                id: '09:00',
+                titulo: 'Manha',
+                astro: 'sol',
+                astroPos: { x: 0.28, y: 0.21 },
+                sky: ['#2b5bab', '#73b3ff', '#c9defd', '#edf2ff'],
+                nightFactor: 0.02,
+                stars: 0,
+                astroGlow: 0.28,
+                horizonGlow: 0.06
+            },
+            {
+                id: '12:00',
+                titulo: 'Meio Dia',
+                astro: 'sol',
+                astroPos: { x: 0.5, y: 0.11 },
+                sky: ['#3d74d0', '#8ec6ff', '#d8ebff', '#f4f8ff'],
+                nightFactor: 0,
+                stars: 0,
+                astroGlow: 0.26,
+                horizonGlow: 0
+            }
+        ];
+    }
+
+    obterCenaAtual() {
+        const indice = this.game?.indiceCenaDoDia ?? 0;
+        return this.cenasDoDia[indice] || this.cenasDoDia[0];
+    }
+
+    avancarCenaDoDia() {
+        this.game.indiceCenaDoDia = (this.game.indiceCenaDoDia + 1) % this.cenasDoDia.length;
+    }
+
     carregarAssets() {
         this.sprites = {
             gorila: {
                 imagem: new Image(),
-                larguraQuadro: 128,
-                alturaQuadro: 128,
-                escalaDesenho: 0.74,
+                larguraQuadro: 256,
+                alturaQuadro: 256,
+                escalaDesenho: 0.42,
                 ancoraPe: 0.5,
                 ancoraMao: {
-                    esquerda: { x: 0.77, y: 0.3 },
-                    direita: { x: 0.23, y: 0.3 }
+                    esquerda: { x: 0.8, y: 0.08 },
+                    direita: { x: 0.2, y: 0.08 }
                 },
                 hitbox: {
-                    raio: 26,
-                    offsetY: 0.58
+                    zonas: [
+                        { x: 0.5, y: 0.3, raio: 22 },
+                        { x: 0.5, y: 0.55, raio: 28 },
+                        { x: 0.38, y: 0.82, raio: 18 },
+                        { x: 0.62, y: 0.82, raio: 18 }
+                    ]
                 },
                 poses: {
-                    normal: 0,
-                    bracoEsquerdo: 1,
-                    bracoDireito: 2
+                    idle: 0,
+                    antecipacaoEsquerda: 1,
+                    lancamentoEsquerdo: 2,
+                    retornoEsquerdo: 3,
+                    antecipacaoDireita: 4,
+                    lancamentoDireita: 5,
+                    retornoDireita: 6,
+                    comemoracaoA: 7,
+                    comemoracaoB: 8,
+                    susto: 9
                 }
             },
             banana: {
@@ -152,11 +282,21 @@ class JogoGorilas {
                     sorrindo: 0,
                     surpreso: 1
                 }
+            },
+            lua: {
+                imagem: new Image(),
+                larguraQuadro: 32,
+                alturaQuadro: 32,
+                expressoes: {
+                    sorrindo: 0,
+                    surpreso: 1
+                },
+                disponivel: false
             }
         };
 
         let imagensCarregadas = 0;
-        const totalImagens = 3;
+        const totalImagens = 4;
 
         const verificarCarregamento = () => {
             imagensCarregadas += 1;
@@ -168,19 +308,29 @@ class JogoGorilas {
 
         const tratarErroImagem = (erro) => {
             console.error('Erro ao carregar imagem:', erro);
+            verificarCarregamento();
         };
 
         this.sprites.gorila.imagem.onload = verificarCarregamento;
         this.sprites.banana.imagem.onload = verificarCarregamento;
-        this.sprites.sol.imagem.onload = verificarCarregamento;
+        this.sprites.sol.imagem.onload = () => {
+            this.sprites.sol.disponivel = true;
+            verificarCarregamento();
+        };
+        this.sprites.lua.imagem.onload = () => {
+            this.sprites.lua.disponivel = true;
+            verificarCarregamento();
+        };
 
         this.sprites.gorila.imagem.onerror = tratarErroImagem;
         this.sprites.banana.imagem.onerror = tratarErroImagem;
         this.sprites.sol.imagem.onerror = tratarErroImagem;
+        this.sprites.lua.imagem.onerror = tratarErroImagem;
 
         this.sprites.gorila.imagem.src = 'assets/gorila.png';
         this.sprites.banana.imagem.src = 'assets/banana.png';
         this.sprites.sol.imagem.src = 'assets/sol.png';
+        this.sprites.lua.imagem.src = 'assets/lua.png';
     }
 
     obterConfigGorila() {
@@ -239,10 +389,19 @@ class JogoGorilas {
 
         const btnModoHxH = document.getElementById('modo-hxh');
         const btnModoHxM = document.getElementById('modo-hxm');
-        if (btnModoHxH) btnModoHxH.addEventListener('click', () => this._selecionarModo('hxh'));
-        if (btnModoHxM) btnModoHxM.addEventListener('click', () => this._selecionarModo('hxm'));
+        if (btnModoHxH) btnModoHxH.addEventListener('click', () => {
+            this.atualizarAmbiencia('menu');
+            this._selecionarModo('hxh');
+        });
+        if (btnModoHxM) btnModoHxM.addEventListener('click', () => {
+            this.atualizarAmbiencia('menu');
+            this._selecionarModo('hxm');
+        });
 
-        btnIniciar.addEventListener('click', () => this.iniciarJogo());
+        btnIniciar.addEventListener('click', () => {
+            this.atualizarAmbiencia('menu');
+            this.iniciarJogo();
+        });
         btnLancar.addEventListener('click', () => this.iniciarArremesso());
         btnMenu.addEventListener('click', () => this.voltarAoMenu());
         if (btnVoltarMenuJogo) {
@@ -363,6 +522,9 @@ class JogoGorilas {
         this.feedbackDuelo = null;
         this.efeitoLancamento = null;
         this.screenShake = { tempo: 0, duracao: 0, forca: 0, x: 0, y: 0 };
+        this.game.astroAtingido = false;
+        this.game.indiceCenaDoDia = 0;
+        this.atualizarAmbiencia('menu');
     }
 
     ocultarTelaImediata(tela) {
@@ -435,10 +597,10 @@ class JogoGorilas {
             this.game.limitePontos = limitePontos;
             this.game.modoIA = modoIA;
             this.game.dificuldadeIA = dificuldadeIA;
-            this.game.solAtingido = false;
+            this.game.astroAtingido = false;
             this.game.mostrarTrajetoria = document.getElementById('mostrarTrajetoria')?.checked ?? true;
-            this.game.faseDia = 0;
             this.game.rodada = 0;
+            this.game.indiceCenaDoDia = 0;
             this.game.cpuPensando = false;
             this.projectile = this.criarEstadoProjetil();
             this.animacaoAcerto = null;
@@ -458,6 +620,7 @@ class JogoGorilas {
             this.ocultarTelaImediata(telaVitoria);
             this.transicionarTela(telaInicial, telaJogo);
             document.body.classList.remove('menu-ativa');
+            this.atualizarAmbiencia('jogo');
 
             this.inicializarCanvas();
             this.atualizarEscalasFisicas();
@@ -833,7 +996,202 @@ class JogoGorilas {
             { y: altura * 0.878, h: Math.max(20, altura * 0.030), alpha: 0.92, velocidadeBase: 16 },
             { y: altura * 0.950, h: Math.max(28, altura * 0.044), alpha: 0.98, velocidadeBase: 28 }
         ];
+        this.gerarNuvensMenu(largura, altura);
         this.gerarCarrosSkylineMenu(largura);
+    }
+
+    gerarNuvensMenu(largura, altura) {
+        const camadas = [
+            {
+                nome: 'fundo',
+                quantidade: 2,
+                largura: [180, 300],
+                altura: [52, 86],
+                yMin: altura * 0.12,
+                yMax: altura * 0.2,
+                velocidade: [8, 14],
+                opacidade: [0.16, 0.24],
+                escala: [0.88, 1.02]
+            },
+            {
+                nome: 'medio',
+                quantidade: 3,
+                largura: [220, 360],
+                altura: [68, 112],
+                yMin: altura * 0.16,
+                yMax: altura * 0.28,
+                velocidade: [12, 20],
+                opacidade: [0.22, 0.34],
+                escala: [0.98, 1.16]
+            },
+            {
+                nome: 'frente',
+                quantidade: 1,
+                largura: [280, 420],
+                altura: [84, 132],
+                yMin: altura * 0.22,
+                yMax: altura * 0.32,
+                velocidade: [18, 28],
+                opacidade: [0.28, 0.42],
+                escala: [1.08, 1.28]
+            }
+        ];
+
+        this.menuNuvens = [];
+        camadas.forEach((camada, camadaIndex) => {
+            for (let i = 0; i < camada.quantidade; i += 1) {
+                const larguraTotal = this.numeroAleatorio(camada.largura[0], camada.largura[1]);
+                const alturaTotal = this.numeroAleatorio(camada.altura[0], camada.altura[1]);
+                const escalaBase = camada.escala[0] + Math.random() * (camada.escala[1] - camada.escala[0]);
+                const tipoSilhueta = this.sortearTipoNuvem(camada.nome);
+                const nuvem = {
+                    camada: camada.nome,
+                    profundidade: camadaIndex,
+                    tipoSilhueta,
+                    x: this.numeroAleatorio(-200, largura + 160),
+                    y: this.numeroAleatorio(Math.floor(camada.yMin), Math.floor(camada.yMax)),
+                    yBase: 0,
+                    velocidadeBase: camada.velocidade[0] + Math.random() * (camada.velocidade[1] - camada.velocidade[0]),
+                    direcao: Math.random() < 0.78 ? 1 : -1,
+                    opacidadeBase: camada.opacidade[0] + Math.random() * (camada.opacidade[1] - camada.opacidade[0]),
+                    larguraTotal,
+                    alturaTotal,
+                    escalaBaseX: escalaBase,
+                    escalaBaseY: escalaBase * (0.94 + Math.random() * 0.08),
+                    flutuacaoAmplitude: 2.5 + camadaIndex * 1.6 + Math.random() * 1.8,
+                    flutuacaoVelocidade: 0.14 + Math.random() * 0.22,
+                    flutuacaoFase: Math.random() * Math.PI * 2,
+                    deformacaoAmplitudeX: 0.008 + camadaIndex * 0.003 + Math.random() * 0.006,
+                    deformacaoAmplitudeY: 0.006 + camadaIndex * 0.003 + Math.random() * 0.006,
+                    deformacaoFase: Math.random() * Math.PI * 2,
+                    brilhoQuente: 0.42 + Math.random() * 0.48,
+                    perfil: this.criarPerfilNuvem(tipoSilhueta),
+                    volumeFundo: {
+                        offsetX: -larguraTotal * (0.08 + Math.random() * 0.04),
+                        offsetY: alturaTotal * (0.08 + Math.random() * 0.06),
+                        escalaX: 0.76 + Math.random() * 0.08,
+                        escalaY: 0.78 + Math.random() * 0.08
+                    },
+                    volumeFrente: {
+                        offsetX: larguraTotal * (0.03 + Math.random() * 0.03),
+                        offsetY: -alturaTotal * (0.03 + Math.random() * 0.025),
+                        escalaX: 0.6 + Math.random() * 0.1,
+                        escalaY: 0.54 + Math.random() * 0.08,
+                        alpha: 0.1 + Math.random() * 0.08
+                    }
+                };
+
+                nuvem.yBase = nuvem.y;
+                this.menuNuvens.push(nuvem);
+            }
+        });
+    }
+
+    atualizarNuvensMenu(largura) {
+        if (!this.menuNuvens?.length) {
+            return;
+        }
+
+        const agora = performance.now() / 1000;
+        const ultimo = this._ultimoTempoNuvensMenu || agora;
+        const delta = Math.min(0.05, agora - ultimo);
+        this._ultimoTempoNuvensMenu = agora;
+
+        this.menuNuvens.forEach((nuvem) => {
+            nuvem.x += nuvem.velocidadeBase * nuvem.direcao * delta;
+            nuvem.y = nuvem.yBase + Math.sin(agora * nuvem.flutuacaoVelocidade + nuvem.flutuacaoFase) * nuvem.flutuacaoAmplitude;
+
+            const margem = nuvem.larguraTotal * (nuvem.escalaBaseX || 1) + 80;
+            if (nuvem.direcao > 0 && nuvem.x > largura + margem) {
+                nuvem.x = -margem;
+            } else if (nuvem.direcao < 0 && nuvem.x < -margem) {
+                nuvem.x = largura + margem;
+            }
+        });
+    }
+
+    desenharNuvensMenu(ctx, largura, altura) {
+        if (!this.menuNuvens?.length) {
+            return;
+        }
+
+        this.atualizarNuvensMenu(largura);
+        const tempo = performance.now() / 1000;
+        const solVirtual = { x: largura * 0.64, y: altura * 0.18 };
+
+        ctx.save();
+        this.menuNuvens
+            .slice()
+            .sort((a, b) => (a.profundidade || 0) - (b.profundidade || 0))
+            .forEach((nuvem) => {
+                const volumeFundo = nuvem.volumeFundo || {};
+                const volumeFrente = nuvem.volumeFrente || {};
+                const distanciaSol = Math.abs(nuvem.x - solVirtual.x);
+                const influenciaSol = Math.max(0, 1 - distanciaSol / (largura * 0.46)) * (0.4 + nuvem.brilhoQuente * 0.6);
+                const deformacao = Math.sin(tempo * (0.28 + (nuvem.profundidade || 0) * 0.06) + nuvem.deformacaoFase);
+                const escalaX = (nuvem.escalaBaseX || 1) * (1 + deformacao * (nuvem.deformacaoAmplitudeX || 0));
+                const escalaY = (nuvem.escalaBaseY || 1) * (1 - deformacao * (nuvem.deformacaoAmplitudeY || 0));
+                const opacidade = nuvem.opacidadeBase;
+                const sombraAlpha = 0.08 + (nuvem.profundidade || 0) * 0.035;
+                const fundoAlpha = 0.16 + (nuvem.profundidade || 0) * 0.07;
+
+                ctx.save();
+                ctx.globalAlpha = fundoAlpha * opacidade;
+                this.desenharFormaNuvem(ctx, nuvem, {
+                    offsetX: volumeFundo.offsetX || -10,
+                    offsetY: volumeFundo.offsetY || 8,
+                    escalaX: (volumeFundo.escalaX || 0.8) * escalaX,
+                    escalaY: (volumeFundo.escalaY || 0.82) * escalaY
+                });
+                ctx.fillStyle = 'rgba(184, 204, 230, 0.92)';
+                ctx.fill();
+                ctx.restore();
+
+                const grad = ctx.createLinearGradient(0, nuvem.y - nuvem.alturaTotal * 0.55, 0, nuvem.y + nuvem.alturaTotal * 0.5);
+                grad.addColorStop(0, `rgba(255, 243, 226, ${0.58 + influenciaSol * 0.18})`);
+                grad.addColorStop(0.52, 'rgba(236, 244, 255, 0.54)');
+                grad.addColorStop(1, 'rgba(188, 208, 236, 0.42)');
+
+                this.desenharFormaNuvem(ctx, nuvem, {
+                    escalaX,
+                    escalaY
+                });
+                ctx.fillStyle = grad;
+                ctx.shadowColor = `rgba(255, 212, 156, ${0.04 + influenciaSol * 0.08})`;
+                ctx.shadowBlur = 8 + (nuvem.profundidade || 0) * 2;
+                ctx.fill();
+
+                this.desenharFormaNuvem(ctx, nuvem, {
+                    offsetX: volumeFrente.offsetX || nuvem.larguraTotal * 0.04,
+                    offsetY: volumeFrente.offsetY || -nuvem.alturaTotal * 0.04,
+                    escalaX: escalaX * (volumeFrente.escalaX || 0.64),
+                    escalaY: escalaY * (volumeFrente.escalaY || 0.58)
+                });
+                const brilhoFrontal = ctx.createLinearGradient(
+                    nuvem.x,
+                    nuvem.y - nuvem.alturaTotal * 0.36,
+                    nuvem.x + nuvem.larguraTotal * 0.16,
+                    nuvem.y + nuvem.alturaTotal * 0.12
+                );
+                brilhoFrontal.addColorStop(0, `rgba(255, 248, 236, ${volumeFrente.alpha + influenciaSol * 0.08})`);
+                brilhoFrontal.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = brilhoFrontal;
+                ctx.shadowBlur = 0;
+                ctx.fill();
+
+                this.desenharFormaNuvem(ctx, nuvem, {
+                    offsetX: -nuvem.larguraTotal * (0.04 + (nuvem.profundidade || 0) * 0.01),
+                    offsetY: nuvem.alturaTotal * (0.02 + (nuvem.profundidade || 0) * 0.008),
+                    escalaX: escalaX * 0.9,
+                    escalaY: escalaY * 0.86
+                });
+                const sombra = ctx.createLinearGradient(0, nuvem.y, 0, nuvem.y + nuvem.alturaTotal * 0.48);
+                sombra.addColorStop(0, 'rgba(255,255,255,0)');
+                sombra.addColorStop(1, `rgba(150, 176, 216, ${sombraAlpha})`);
+                ctx.fillStyle = sombra;
+                ctx.fill();
+            });
+        ctx.restore();
     }
 
     gerarCarrosSkylineMenu(largura) {
@@ -918,6 +1276,7 @@ class JogoGorilas {
         const camadaMedia = this.menuSkyline[2];
         const camadaFrente = this.menuSkyline[3];
 
+        this.desenharNuvensMenu(ctx, largura, altura);
         desenharCamada(camadaMuitoDistante);
         desenharCamada(camadaDistante);
         desenharCamada(camadaMedia);
@@ -1629,7 +1988,7 @@ class JogoGorilas {
         this.efeitoLancamento = {
             jogador: this.game.jogadorAtual,
             tempo: 0,
-            duracao: 0.18
+            duracao: 0.36
         };
 
         this.projectile = {
@@ -1705,8 +2064,8 @@ class JogoGorilas {
             return { tipo: 'fora' };
         }
 
-        if (this.solFoiAtingido(x, y)) {
-            return { tipo: 'sol', x, y };
+        if (this.astroFoiAtingido(x, y)) {
+            return { tipo: 'astro', x, y };
         }
 
         const gorilaAtingido = this.gorilaFoiAtingido(x, y);
@@ -1725,35 +2084,32 @@ class JogoGorilas {
         return x < -20 || x > this.larguraTela + 20 || y < -60 || y > this.alturaTela + 20;
     }
 
-    solFoiAtingido(x, y) {
-        const sol = this.obterAreaSol();
-        return this.distanciaEntrePontos(x, y, sol.x, sol.y) <= sol.raio;
+    astroFoiAtingido(x, y) {
+        const astro = this.obterAreaAstro();
+        if (!astro) return false;
+        return this.distanciaEntrePontos(x, y, astro.x, astro.y) <= astro.raio;
     }
 
-    obterAreaSol() {
-        const f = this.game ? (this.game.faseDia || 0) : 0;
-        const raio = (this.sprites.sol.larguraQuadro * 1.5) / 2;
-        const yTopo = 20 + raio;
-        // O sol desce em direção ao horizonte (≈40% da tela) conforme anoitece
-        const yHorizonte = this.alturaTela * 0.40;
+    obterAreaAstro() {
+        const cena = this.obterCenaAtual();
+        if (!cena || cena.astro === 'nenhum') {
+            return null;
+        }
+
+        const sprite = cena.astro === 'lua' ? this.sprites.lua : this.sprites.sol;
+        const raio = (sprite.larguraQuadro * 1.5) / 2;
         return {
-            x: this.larguraTela / 2,
-            y: yTopo + (yHorizonte - yTopo) * f,
+            tipo: cena.astro,
+            x: this.larguraTela * cena.astroPos.x,
+            y: this.alturaTela * cena.astroPos.y,
             raio
         };
     }
 
     gorilaFoiAtingido(x, y) {
-        const config = this.obterConfigGorila();
-        const raioAcerto = config.hitbox?.raio || 20;
-        const offsetY = config.hitbox?.offsetY || 0.5;
-
         for (let jogador = 1; jogador <= 2; jogador += 1) {
-            const gorila = this.gorilas[jogador];
-            const centroX = gorila.x + gorila.largura / 2;
-            const centroY = gorila.y + gorila.altura * offsetY;
-
-            if (this.distanciaEntrePontos(x, y, centroX, centroY) <= raioAcerto) {
+            const distancia = this.obterDistanciaProjetilGorila(jogador, x, y);
+            if (distancia <= 0) {
                 return jogador;
             }
         }
@@ -1766,26 +2122,21 @@ class JogoGorilas {
             return;
         }
 
-        const config = this.obterConfigGorila();
-        const raioAcerto = config.hitbox?.raio || 20;
-        const offsetY = config.hitbox?.offsetY || 0.5;
-        const margemQuase = raioAcerto + 28;
+        const margemQuase = 28;
 
         for (let jogador = 1; jogador <= 2; jogador += 1) {
             if (jogador === this.projectile.jogador) {
                 continue;
             }
 
-            const gorila = this.gorilas[jogador];
-            const centroX = gorila.x + gorila.largura / 2;
-            const centroY = gorila.y + gorila.altura * offsetY;
-            const distancia = this.distanciaEntrePontos(x, y, centroX, centroY);
+            const distancia = this.obterDistanciaProjetilGorila(jogador, x, y);
 
-            if (distancia > raioAcerto && distancia <= margemQuase) {
+            if (distancia > 0 && distancia <= margemQuase) {
                 this.projectile.quaseAcertoDisparado = true;
                 this.feedbackDuelo = {
                     texto: `Quase em ${this.jogadores[jogador].nome}!`,
-                    tempo: 0.55,
+                    tempo: 0.68,
+                    duracao: 0.68,
                     jogador
                 };
                 this.aplicarScreenShake(3, 0.12);
@@ -1793,6 +2144,48 @@ class JogoGorilas {
                 return;
             }
         }
+    }
+
+    obterZonasHitboxGorila(jogador) {
+        const config = this.obterConfigGorila();
+        const gorila = this.gorilas[jogador];
+        if (!gorila) {
+            return [];
+        }
+
+        const zonas = config.hitbox?.zonas;
+        if (Array.isArray(zonas) && zonas.length > 0) {
+            return zonas.map((zona) => ({
+                x: gorila.x + gorila.largura * zona.x,
+                y: gorila.y + gorila.altura * zona.y,
+                raio: zona.raio
+            }));
+        }
+
+        const raioPadrao = config.hitbox?.raio || 20;
+        const offsetY = config.hitbox?.offsetY || 0.5;
+        return [{
+            x: gorila.x + gorila.largura / 2,
+            y: gorila.y + gorila.altura * offsetY,
+            raio: raioPadrao
+        }];
+    }
+
+    obterDistanciaProjetilGorila(jogador, x, y) {
+        const zonas = this.obterZonasHitboxGorila(jogador);
+        if (zonas.length === 0) {
+            return Infinity;
+        }
+
+        let menorDistancia = Infinity;
+        zonas.forEach((zona) => {
+            const distancia = this.distanciaEntrePontos(x, y, zona.x, zona.y) - zona.raio;
+            if (distancia < menorDistancia) {
+                menorDistancia = distancia;
+            }
+        });
+
+        return menorDistancia;
     }
 
     cidadeTemMaterialEm(x, y) {
@@ -1815,7 +2208,7 @@ class JogoGorilas {
             this.spawnarImpactoVisual(impacto.x, impacto.y, 'predio');
             this.aplicarScreenShake(8, 0.22);
             this.tocarSomExplosao('predio');
-            this.game.solAtingido = false;
+            this.game.astroAtingido = false;
             this.encerrarTurno();
             return;
         }
@@ -1832,15 +2225,15 @@ class JogoGorilas {
             return;
         }
 
-        if (impacto.tipo === 'sol') {
-            this.game.solAtingido = true;
+        if (impacto.tipo === 'astro') {
+            this.game.astroAtingido = true;
             this.spawnarImpactoVisual(impacto.x, impacto.y, 'sol');
             this.aplicarScreenShake(5, 0.18);
             this.encerrarTurno();
             return;
         }
 
-        this.game.solAtingido = false;
+        this.game.astroAtingido = false;
         this.encerrarTurno();
     }
 
@@ -1853,7 +2246,7 @@ class JogoGorilas {
             x: x || gorilaPerdedor.x + gorilaPerdedor.largura / 2,
             y: y || gorilaPerdedor.y + gorilaPerdedor.altura / 2,
             tempo: 0,
-            duracao: 1.8
+            duracao: 2.1
         };
     }
 
@@ -1939,13 +2332,12 @@ class JogoGorilas {
         }
 
         this.game.rodada += 1;
-        // Tarde=0 → Noite=1 ao longo de 8 rodadas
-        this.game.faseDia = Math.min(1, this.game.rodada / 8);
+        this.avancarCenaDoDia();
 
         this.projectile = this.criarEstadoProjetil();
         this.rastro = [];
         this.game.jogadorAtual = vencedorId;
-        this.game.solAtingido = false;
+        this.game.astroAtingido = false;
         this.animacaoAcerto = null;
         this.efeitoLancamento = null;
         this.impactosVisuais = [];
@@ -1972,6 +2364,7 @@ class JogoGorilas {
         document.body.classList.remove('menu-ativa');
         
         this.tocarSomVitoria();
+        this.atualizarAmbiencia('vitoria');
         document.getElementById('msg-vitoria').textContent = `${vencedor.nome.toUpperCase()} VENCEU!`;
         document.getElementById('placar-final').textContent = `Placar Final: ${p1} - ${p2}`;
     }
@@ -1984,7 +2377,7 @@ class JogoGorilas {
         this.ctx.save();
         this.ctx.translate(this.screenShake.x, this.screenShake.y);
         this.desenharFundo();
-        this.desenharSol(this.game.solAtingido ? 'surpreso' : 'sorrindo');
+        this.desenharAstro(this.game.astroAtingido ? 'surpreso' : 'sorrindo');
         this.desenharNuvens();
         this.desenharCidade();
         this.desenharRastro();
@@ -2020,49 +2413,46 @@ class JogoGorilas {
     }
 
     desenharFundo() {
-        const f = this.game.faseDia || 0;
+        const cena = this.obterCenaAtual();
+        const astro = this.obterAreaAstro();
 
-        // Céu de tarde (sempre base)
-        const gradTarde = this.ctx.createLinearGradient(0, 0, 0, this.alturaTela);
-        gradTarde.addColorStop(0, '#1e4b8e');
-        gradTarde.addColorStop(0.4, '#3b82f6');
-        gradTarde.addColorStop(0.75, '#fb923c');
-        gradTarde.addColorStop(1, '#ff7e5f');
-        this.ctx.fillStyle = gradTarde;
+        const gradCeu = this.ctx.createLinearGradient(0, 0, 0, this.alturaTela);
+        gradCeu.addColorStop(0, cena.sky[0]);
+        gradCeu.addColorStop(0.4, cena.sky[1]);
+        gradCeu.addColorStop(0.76, cena.sky[2]);
+        gradCeu.addColorStop(1, cena.sky[3]);
+        this.ctx.fillStyle = gradCeu;
         this.ctx.fillRect(0, 0, this.larguraTela, this.alturaTela);
 
-        // Overlay de noite: funde sobre o céu de tarde conforme faseDia
-        if (f > 0) {
-            const gradNoite = this.ctx.createLinearGradient(0, 0, 0, this.alturaTela);
-            gradNoite.addColorStop(0, '#020617');
-            gradNoite.addColorStop(0.4, '#0f172a');
-            gradNoite.addColorStop(0.75, '#1e293b');
-            gradNoite.addColorStop(1, '#334155');
-            this.ctx.save();
-            this.ctx.globalAlpha = f;
-            this.ctx.fillStyle = gradNoite;
-            this.ctx.fillRect(0, 0, this.larguraTela, this.alturaTela);
-            this.ctx.restore();
+        if (cena.horizonGlow > 0) {
+            const brilhoHorizonte = this.ctx.createLinearGradient(0, this.alturaTela * 0.52, 0, this.alturaTela);
+            brilhoHorizonte.addColorStop(0, 'rgba(255, 200, 120, 0)');
+            brilhoHorizonte.addColorStop(0.55, `rgba(255, 184, 112, ${cena.horizonGlow * 0.46})`);
+            brilhoHorizonte.addColorStop(1, `rgba(255, 128, 92, ${cena.horizonGlow * 0.72})`);
+            this.ctx.fillStyle = brilhoHorizonte;
+            this.ctx.fillRect(0, this.alturaTela * 0.48, this.larguraTela, this.alturaTela * 0.52);
         }
 
-        // Estrelas aparecem a partir da metade da transição
-        if (f > 0.25) {
-            this.desenharEstrelas(f);
+        if (cena.stars > 0) {
+            this.desenharEstrelas(cena.stars);
         }
 
-        // Brilho do Sol (some com a noite)
-        if (f < 1) {
-            const areaSol = this.obterAreaSol();
+        if (astro && cena.astroGlow > 0) {
+            const corAstro = astro.tipo === 'lua'
+                ? `rgba(206, 223, 255, ${0.28 * cena.astroGlow})`
+                : `rgba(255, 231, 132, ${0.42 * cena.astroGlow})`;
             const brilho = this.ctx.createRadialGradient(
-                areaSol.x, areaSol.y, areaSol.raio * 0.8,
-                areaSol.x, areaSol.y, areaSol.raio * 4
+                astro.x, astro.y, astro.raio * 0.7,
+                astro.x, astro.y, astro.raio * 4.6
             );
-            brilho.addColorStop(0, `rgba(255,255,150,${0.4 * (1 - f)})`);
-            brilho.addColorStop(0.4, `rgba(255,255,0,${0.15 * (1 - f)})`);
-            brilho.addColorStop(1, 'rgba(255,255,0,0)');
+            brilho.addColorStop(0, corAstro);
+            brilho.addColorStop(0.36, astro.tipo === 'lua'
+                ? `rgba(180, 208, 255, ${0.14 * cena.astroGlow})`
+                : `rgba(255, 221, 110, ${0.16 * cena.astroGlow})`);
+            brilho.addColorStop(1, 'rgba(255,255,255,0)');
             this.ctx.fillStyle = brilho;
             this.ctx.beginPath();
-            this.ctx.arc(areaSol.x, areaSol.y, areaSol.raio * 4, 0, Math.PI * 2);
+            this.ctx.arc(astro.x, astro.y, astro.raio * 4.6, 0, Math.PI * 2);
             this.ctx.fill();
         }
 
@@ -2155,8 +2545,12 @@ class JogoGorilas {
 
     desenharNuvens() {
         this.ctx.save();
-        const f = this.game.faseDia || 0;
-        const areaSol = this.obterAreaSol();
+        const cena = this.obterCenaAtual();
+        const f = cena.nightFactor || 0;
+        const areaSol = this.obterAreaAstro() || {
+            x: this.larguraTela * 0.78,
+            y: this.alturaTela * 0.2
+        };
         const tempo = performance.now() / 1000;
 
         this.nuvens
@@ -2166,7 +2560,9 @@ class JogoGorilas {
             const volumeFundo = nuvem.volumeFundo || {};
             const volumeFrente = nuvem.volumeFrente || {};
             const distanciaSol = Math.abs(nuvem.x - areaSol.x);
-            const influenciaSol = Math.max(0, 1 - distanciaSol / (this.larguraTela * 0.42)) * (1 - f) * (0.35 + nuvem.brilhoQuente * 0.65);
+            const influenciaSol = Math.max(0, 1 - distanciaSol / (this.larguraTela * 0.42))
+                * (cena.astro === 'sol' ? 1 - f * 0.65 : 0.16)
+                * (0.35 + nuvem.brilhoQuente * 0.65);
             const deformacao = Math.sin(tempo * (0.32 + (nuvem.profundidade || 0) * 0.08) + nuvem.deformacaoFase);
             const escalaX = (nuvem.escalaBaseX || 1) * (1 + deformacao * (nuvem.deformacaoAmplitudeX || 0));
             const escalaY = (nuvem.escalaBaseY || 1) * (1 - deformacao * (nuvem.deformacaoAmplitudeY || 0));
@@ -2263,21 +2659,21 @@ class JogoGorilas {
 
     desenharGorilas() {
         if (this.animacaoAcerto) {
-            const poseVencedor = Math.floor(this.animacaoAcerto.tempo / 0.27) % 2 === 0 ? 'bracoEsquerdo' : 'bracoDireito';
+            const poseVencedor = Math.floor(this.animacaoAcerto.tempo / 0.32) % 2 === 0 ? 'comemoracaoA' : 'comemoracaoB';
             const vencedor = this.animacaoAcerto.vencedor;
-            const impulso = Math.abs(Math.sin(this.animacaoAcerto.tempo * 8.5));
+            const impulso = Math.abs(Math.sin(this.animacaoAcerto.tempo * 6.8));
 
             this.desenharGorila(vencedor, poseVencedor, {
-                deslocamentoYExtra: -impulso * 10,
-                escalaExtra: 1 + impulso * 0.05
+                deslocamentoYExtra: -impulso * 8,
+                escalaExtra: 1 + impulso * 0.04
             });
 
             // O perdedor some na explosão instantaneamente (como no original)
             return;
         }
 
-        this.desenharGorila(1, 'normal');
-        this.desenharGorila(2, 'normal');
+        this.desenharGorila(1, 'idle');
+        this.desenharGorila(2, 'idle');
     }
 
     desenharProjetil() {
@@ -2314,32 +2710,52 @@ class JogoGorilas {
         }
     }
 
-    desenharSol(expressao = 'sorrindo') {
-        const f = this.game.faseDia || 0;
-        if (f >= 1) return;
+    desenharAstro(expressao = 'sorrindo') {
+        const astro = this.obterAreaAstro();
+        if (!astro) return;
 
-        const sol = this.sprites.sol;
-        const largura = sol.larguraQuadro * 1.5;
-        const altura = sol.alturaQuadro * 1.5;
-        const areaSol = this.obterAreaSol();
-
-        const x = areaSol.x - largura / 2;
-        const y = areaSol.y - altura / 2;
-        const quadroX = sol.expressoes[expressao] * sol.larguraQuadro;
+        const sprite = astro.tipo === 'lua' ? this.sprites.lua : this.sprites.sol;
+        const largura = sprite.larguraQuadro * 1.5;
+        const altura = sprite.alturaQuadro * 1.5;
+        const x = astro.x - largura / 2;
+        const y = astro.y - altura / 2;
+        const quadroX = (sprite.expressoes?.[expressao] || 0) * sprite.larguraQuadro;
 
         this.ctx.save();
-        this.ctx.globalAlpha = 1 - f;
-        this.ctx.drawImage(
-            sol.imagem,
-            quadroX, 0,
-            sol.larguraQuadro, sol.alturaQuadro,
-            x, y,
-            largura, altura
-        );
+        if (sprite.disponivel) {
+            this.ctx.drawImage(
+                sprite.imagem,
+                quadroX, 0,
+                sprite.larguraQuadro, sprite.alturaQuadro,
+                x, y,
+                largura, altura
+            );
+        } else if (astro.tipo === 'lua') {
+            this.desenharLuaFallback(astro);
+        } else {
+            this.ctx.fillStyle = '#ffd966';
+            this.ctx.beginPath();
+            this.ctx.arc(astro.x, astro.y, astro.raio, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
         this.ctx.restore();
     }
 
-    desenharGorila(jogador, pose = 'normal', opcoes = {}) {
+    desenharLuaFallback(astro) {
+        this.ctx.save();
+        this.ctx.fillStyle = '#dce7ff';
+        this.ctx.beginPath();
+        this.ctx.arc(astro.x, astro.y, astro.raio, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.globalCompositeOperation = 'destination-out';
+        this.ctx.beginPath();
+        this.ctx.arc(astro.x + astro.raio * 0.34, astro.y - astro.raio * 0.08, astro.raio * 0.82, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.restore();
+    }
+
+    desenharGorila(jogador, pose = 'idle', opcoes = {}) {
         const gorila = this.sprites.gorila;
         const posicao = this.gorilas[jogador];
         const largura = posicao.largura || gorila.larguraQuadro;
@@ -2351,24 +2767,40 @@ class JogoGorilas {
             ? Math.min(1, efeitoLancamento.tempo / efeitoLancamento.duracao)
             : 0;
         const recuo = efeitoLancamento
-            ? Math.sin(progressoLancamento * Math.PI) * 8
+            ? Math.sin(progressoLancamento * Math.PI) * 9
             : 0;
         const deslocamentoX = jogador === 1 ? -recuo : recuo;
-        const deslocamentoY = efeitoLancamento ? -Math.sin(progressoLancamento * Math.PI) * 3 : 0;
-        const poseRender = efeitoLancamento
-            ? (jogador === 1 ? 'bracoDireito' : 'bracoEsquerdo')
-            : pose;
+        const deslocamentoY = efeitoLancamento ? -Math.sin(progressoLancamento * Math.PI) * 4 : 0;
+        let poseRender = pose;
+
+        if (efeitoLancamento) {
+            const lancandoParaDireita = jogador === 1;
+            if (progressoLancamento < 0.38) {
+                poseRender = lancandoParaDireita ? 'antecipacaoDireita' : 'antecipacaoEsquerda';
+            } else if (progressoLancamento < 0.66) {
+                poseRender = lancandoParaDireita ? 'lancamentoDireita' : 'lancamentoEsquerdo';
+            } else {
+                poseRender = lancandoParaDireita ? 'retornoDireita' : 'retornoEsquerdo';
+            }
+        }
+
         const idleAtivo = !this.projectile.ativo && !this.animacaoAcerto;
         const idlePulso = idleAtivo ? Math.sin(Date.now() / 520 + jogador * 0.9) : 0;
         const idleY = idleAtivo ? Math.max(0, idlePulso) * 0.65 : 0;
         const idleScale = idleAtivo ? 1 + Math.max(0, idlePulso) * 0.005 : 1;
         const esquivaAtiva = this.feedbackDuelo && this.feedbackDuelo.jogador === jogador;
-        const esquivaPulso = esquivaAtiva ? Math.sin((0.55 - this.feedbackDuelo.tempo) * 18) : 0;
+        const esquivaProgresso = esquivaAtiva
+            ? 1 - (this.feedbackDuelo.tempo / (this.feedbackDuelo.duracao || 0.68))
+            : 0;
+        const esquivaPulso = esquivaAtiva ? Math.sin(esquivaProgresso * Math.PI * 1.1) : 0;
+        if (esquivaAtiva && !efeitoLancamento) {
+            poseRender = 'susto';
+        }
         const escalaFinal = idleScale * (opcoes.escalaExtra || 1);
         const larguraFinal = largura * escalaFinal;
         const alturaFinal = altura * escalaFinal;
-        const esquivaX = esquivaAtiva ? (jogador === 1 ? -1 : 1) * esquivaPulso * 4 : 0;
-        const esquivaY = esquivaAtiva ? Math.abs(esquivaPulso) * 3 : 0;
+        const esquivaX = esquivaAtiva ? (jogador === 1 ? -1 : 1) * esquivaPulso * 3.5 : 0;
+        const esquivaY = esquivaAtiva ? Math.abs(esquivaPulso) * 2.4 : 0;
         const xFinal = posicao.x + deslocamentoX + esquivaX - (larguraFinal - largura) / 2;
         const yFinal = posicao.y + deslocamentoY + idleY + esquivaY + (opcoes.deslocamentoYExtra || 0) - (alturaFinal - altura);
         const elevacaoVisual = Math.max(0, (posicao.y + posicao.altura) - (yFinal + alturaFinal));
@@ -2560,7 +2992,7 @@ class JogoGorilas {
         this.efeitoLancamento = {
             jogador: 2,
             tempo: 0,
-            duracao: 0.18
+            duracao: 0.36
         };
 
         this.projectile = {
@@ -2993,9 +3425,9 @@ class JogoGorilas {
         }
     }
 
-    desenharEstrelas(faseDia) {
+    desenharEstrelas(intensidade = 1) {
         if (this.estrelas.length === 0) return;
-        const alphaBase = Math.min(1, (faseDia - 0.25) / 0.5);
+        const alphaBase = Math.max(0, Math.min(1, intensidade));
         const t = Date.now() / 1000;
 
         this.ctx.save();
@@ -3015,10 +3447,139 @@ class JogoGorilas {
     iniciarAudioCtx() {
         if (!this.audioCtx) {
             this.audioCtx = new (window.AudioContext || /** @type {any} */ (window).webkitAudioContext)();
+            this.audioMasterGain = this.audioCtx.createGain();
+            this.audioSfxGain = this.audioCtx.createGain();
+            this.audioAmbienceGain = this.audioCtx.createGain();
+
+            this.audioMasterGain.gain.value = 0.92;
+            this.audioSfxGain.gain.value = 0.94;
+            this.audioAmbienceGain.gain.value = 0.0001;
+
+            this.audioSfxGain.connect(this.audioMasterGain);
+            this.audioAmbienceGain.connect(this.audioMasterGain);
+            this.audioMasterGain.connect(this.audioCtx.destination);
         }
         if (this.audioCtx.state === 'suspended') {
             this.audioCtx.resume();
         }
+    }
+
+    obterSaidaSfx() {
+        return this.audioSfxGain || this.audioCtx?.destination;
+    }
+
+    criarBufferRuido(duracao = 0.2, color = 'white') {
+        const ctx = this.audioCtx;
+        const buffer = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * duracao)), ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let ultimaAmostra = 0;
+
+        for (let i = 0; i < data.length; i += 1) {
+            const branco = Math.random() * 2 - 1;
+            if (color === 'pink') {
+                ultimaAmostra = 0.985 * ultimaAmostra + 0.015 * branco;
+                data[i] = (ultimaAmostra + branco * 0.35) * 0.8;
+            } else if (color === 'brown') {
+                ultimaAmostra = Math.max(-1, Math.min(1, ultimaAmostra + branco * 0.09));
+                data[i] = ultimaAmostra * 0.7;
+            } else {
+                data[i] = branco;
+            }
+        }
+
+        return buffer;
+    }
+
+    garantirAmbienciaMenu() {
+        try {
+            this.iniciarAudioCtx();
+            if (this.menuAmbience) {
+                return;
+            }
+
+            const ctx = this.audioCtx;
+            const ruido = ctx.createBufferSource();
+            ruido.buffer = this.criarBufferRuido(2.8, 'brown');
+            ruido.loop = true;
+
+            const filtroRuido = ctx.createBiquadFilter();
+            filtroRuido.type = 'lowpass';
+            filtroRuido.frequency.value = 520;
+
+            const ganhoRuido = ctx.createGain();
+            ganhoRuido.gain.value = 0.12;
+
+            const hum = ctx.createOscillator();
+            hum.type = 'triangle';
+            hum.frequency.value = 78;
+
+            const filtroHum = ctx.createBiquadFilter();
+            filtroHum.type = 'lowpass';
+            filtroHum.frequency.value = 180;
+
+            const ganhoHum = ctx.createGain();
+            ganhoHum.gain.value = 0.035;
+
+            const brilho = ctx.createOscillator();
+            brilho.type = 'sine';
+            brilho.frequency.value = 312;
+
+            const ganhoBrilho = ctx.createGain();
+            ganhoBrilho.gain.value = 0.012;
+
+            const lfo = ctx.createOscillator();
+            lfo.type = 'sine';
+            lfo.frequency.value = 0.08;
+
+            const lfoGain = ctx.createGain();
+            lfoGain.gain.value = 0.018;
+
+            lfo.connect(lfoGain);
+            lfoGain.connect(ganhoRuido.gain);
+
+            ruido.connect(filtroRuido);
+            filtroRuido.connect(ganhoRuido);
+            ganhoRuido.connect(this.audioAmbienceGain);
+
+            hum.connect(filtroHum);
+            filtroHum.connect(ganhoHum);
+            ganhoHum.connect(this.audioAmbienceGain);
+
+            brilho.connect(ganhoBrilho);
+            ganhoBrilho.connect(this.audioAmbienceGain);
+
+            ruido.start();
+            hum.start();
+            brilho.start();
+            lfo.start();
+
+            this.menuAmbience = {
+                ruido,
+                hum,
+                brilho,
+                lfo
+            };
+        } catch (_) { /* Ambiente pode falhar silenciosamente */ }
+    }
+
+    atualizarAmbiencia(contexto = 'menu') {
+        try {
+            this.iniciarAudioCtx();
+            this.garantirAmbienciaMenu();
+            if (!this.audioCtx || !this.audioAmbienceGain) {
+                return;
+            }
+
+            const alvo = contexto === 'menu'
+                ? 0.055
+                : contexto === 'vitoria'
+                    ? 0.03
+                    : 0.0001;
+            const agora = this.audioCtx.currentTime;
+            this.audioAmbienceGain.gain.cancelScheduledValues(agora);
+            this.audioAmbienceGain.gain.setValueAtTime(Math.max(0.0001, this.audioAmbienceGain.gain.value), agora);
+            this.audioAmbienceGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, alvo), agora + 0.55);
+        } catch (_) { /* ignorar */ }
     }
 
     tocarSomLancamento() {
@@ -3026,38 +3587,59 @@ class JogoGorilas {
             this.iniciarAudioCtx();
             const ctx = this.audioCtx;
             const t = ctx.currentTime;
+            const saida = this.obterSaidaSfx();
 
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(saida);
             osc.type = 'triangle';
-            osc.frequency.setValueAtTime(190, t);
-            osc.frequency.exponentialRampToValueAtTime(560, t + 0.13);
-            gain.gain.setValueAtTime(0.16, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            osc.frequency.setValueAtTime(170, t);
+            osc.frequency.exponentialRampToValueAtTime(520, t + 0.14);
+            gain.gain.setValueAtTime(0.11, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
             osc.start(t);
-            osc.stop(t + 0.2);
+            osc.stop(t + 0.22);
+
+            const snap = ctx.createOscillator();
+            const snapGain = ctx.createGain();
+            snap.type = 'square';
+            snap.frequency.setValueAtTime(118, t);
+            snap.frequency.exponentialRampToValueAtTime(76, t + 0.045);
+            snapGain.gain.setValueAtTime(0.03, t);
+            snapGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+            snap.connect(snapGain);
+            snapGain.connect(saida);
+            snap.start(t);
+            snap.stop(t + 0.06);
 
             const whoosh = ctx.createBufferSource();
-            const bufSize = Math.floor(ctx.sampleRate * 0.12);
-            const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-            const data = buf.getChannelData(0);
-            for (let i = 0; i < bufSize; i++) {
-                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 2.2);
-            }
+            whoosh.buffer = this.criarBufferRuido(0.16, 'pink');
             const filt = ctx.createBiquadFilter();
             filt.type = 'bandpass';
-            filt.frequency.setValueAtTime(900, t);
-            filt.Q.value = 0.8;
+            filt.frequency.setValueAtTime(840, t);
+            filt.frequency.exponentialRampToValueAtTime(1160, t + 0.12);
+            filt.Q.value = 1.2;
             const whooshGain = ctx.createGain();
-            whooshGain.gain.setValueAtTime(0.04, t);
-            whooshGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-            whoosh.buffer = buf;
+            whooshGain.gain.setValueAtTime(0.028, t);
+            whooshGain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
             whoosh.connect(filt);
             filt.connect(whooshGain);
-            whooshGain.connect(ctx.destination);
+            whooshGain.connect(saida);
             whoosh.start(t);
+
+            const assobio = ctx.createOscillator();
+            const assobioGain = ctx.createGain();
+            assobio.type = 'sine';
+            assobio.frequency.setValueAtTime(820, t + 0.02);
+            assobio.frequency.exponentialRampToValueAtTime(620, t + 0.16);
+            assobioGain.gain.setValueAtTime(0.0001, t);
+            assobioGain.gain.exponentialRampToValueAtTime(0.014, t + 0.03);
+            assobioGain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+            assobio.connect(assobioGain);
+            assobioGain.connect(saida);
+            assobio.start(t + 0.01);
+            assobio.stop(t + 0.18);
         } catch (_) { /* AudioContext pode estar bloqueado */ }
     }
 
@@ -3066,50 +3648,69 @@ class JogoGorilas {
             this.iniciarAudioCtx();
             const ctx = this.audioCtx;
             const explosaoGorila = tipo === 'gorila';
-            const bufSize = Math.floor(ctx.sampleRate * (explosaoGorila ? 0.42 : 0.3));
-            const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-            const data = buf.getChannelData(0);
-            for (let i = 0; i < bufSize; i++) {
-                const queda = Math.pow(1 - i / bufSize, explosaoGorila ? 1.45 : 1.9);
-                data[i] = (Math.random() * 2 - 1) * queda;
-            }
+            const saida = this.obterSaidaSfx();
             const src = ctx.createBufferSource();
-            src.buffer = buf;
+            src.buffer = this.criarBufferRuido(explosaoGorila ? 0.44 : 0.32, explosaoGorila ? 'pink' : 'brown');
             const filt = ctx.createBiquadFilter();
             filt.type = 'lowpass';
-            filt.frequency.value = explosaoGorila ? 520 : 340;
+            filt.frequency.value = explosaoGorila ? 680 : 300;
             const gain = ctx.createGain();
             gain.gain.setValueAtTime(explosaoGorila ? 1.05 : 0.82, ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (explosaoGorila ? 0.55 : 0.4));
             src.connect(filt);
             filt.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(saida);
             src.start();
 
             if (explosaoGorila) {
                 const ring = ctx.createOscillator();
                 const ringGain = ctx.createGain();
                 ring.type = 'triangle';
-                ring.frequency.setValueAtTime(140, ctx.currentTime);
-                ring.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.16);
-                ringGain.gain.setValueAtTime(0.08, ctx.currentTime);
-                ringGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+                ring.frequency.setValueAtTime(170, ctx.currentTime);
+                ring.frequency.exponentialRampToValueAtTime(78, ctx.currentTime + 0.18);
+                ringGain.gain.setValueAtTime(0.085, ctx.currentTime);
+                ringGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
                 ring.connect(ringGain);
-                ringGain.connect(ctx.destination);
+                ringGain.connect(saida);
                 ring.start(ctx.currentTime);
-                ring.stop(ctx.currentTime + 0.18);
+                ring.stop(ctx.currentTime + 0.22);
+
+                const brilho = ctx.createOscillator();
+                const brilhoGain = ctx.createGain();
+                brilho.type = 'sine';
+                brilho.frequency.setValueAtTime(980, ctx.currentTime);
+                brilho.frequency.exponentialRampToValueAtTime(360, ctx.currentTime + 0.16);
+                brilhoGain.gain.setValueAtTime(0.028, ctx.currentTime);
+                brilhoGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
+                brilho.connect(brilhoGain);
+                brilhoGain.connect(saida);
+                brilho.start(ctx.currentTime);
+                brilho.stop(ctx.currentTime + 0.16);
             } else {
                 const debris = ctx.createOscillator();
                 const debrisGain = ctx.createGain();
                 debris.type = 'square';
-                debris.frequency.setValueAtTime(95, ctx.currentTime);
-                debris.frequency.exponentialRampToValueAtTime(48, ctx.currentTime + 0.12);
-                debrisGain.gain.setValueAtTime(0.03, ctx.currentTime);
-                debrisGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+                debris.frequency.setValueAtTime(88, ctx.currentTime);
+                debris.frequency.exponentialRampToValueAtTime(44, ctx.currentTime + 0.14);
+                debrisGain.gain.setValueAtTime(0.028, ctx.currentTime);
+                debrisGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
                 debris.connect(debrisGain);
-                debrisGain.connect(ctx.destination);
+                debrisGain.connect(saida);
                 debris.start(ctx.currentTime);
-                debris.stop(ctx.currentTime + 0.12);
+                debris.stop(ctx.currentTime + 0.14);
+
+                const estalo = ctx.createBufferSource();
+                estalo.buffer = this.criarBufferRuido(0.06, 'white');
+                const estaloFilter = ctx.createBiquadFilter();
+                estaloFilter.type = 'highpass';
+                estaloFilter.frequency.value = 1180;
+                const estaloGain = ctx.createGain();
+                estaloGain.gain.setValueAtTime(0.018, ctx.currentTime);
+                estaloGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+                estalo.connect(estaloFilter);
+                estaloFilter.connect(estaloGain);
+                estaloGain.connect(saida);
+                estalo.start(ctx.currentTime + 0.01);
             }
         } catch (_) { /* ignorar */ }
     }
@@ -3118,19 +3719,33 @@ class JogoGorilas {
         try {
             this.iniciarAudioCtx();
             const ctx = this.audioCtx;
-            const notas = [523, 659, 784, 1047];
+            const saida = this.obterSaidaSfx();
+            const notas = [523, 659, 784, 1047, 1318];
             notas.forEach((freq, i) => {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
                 osc.connect(gain);
-                gain.connect(ctx.destination);
-                const t = ctx.currentTime + i * 0.16;
+                gain.connect(saida);
+                const t = ctx.currentTime + i * 0.13;
                 osc.frequency.setValueAtTime(freq, t);
-                gain.gain.setValueAtTime(0.25, t);
-                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+                osc.type = i % 2 === 0 ? 'triangle' : 'sine';
+                gain.gain.setValueAtTime(0.2, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
                 osc.start(t);
-                osc.stop(t + 0.28);
+                osc.stop(t + 0.3);
             });
+
+            const baixo = ctx.createOscillator();
+            const baixoGain = ctx.createGain();
+            baixo.type = 'triangle';
+            baixo.frequency.setValueAtTime(130, ctx.currentTime);
+            baixo.frequency.exponentialRampToValueAtTime(196, ctx.currentTime + 0.42);
+            baixoGain.gain.setValueAtTime(0.045, ctx.currentTime);
+            baixoGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            baixo.connect(baixoGain);
+            baixoGain.connect(saida);
+            baixo.start(ctx.currentTime);
+            baixo.stop(ctx.currentTime + 0.5);
         } catch (_) { /* ignorar */ }
     }
 
@@ -3139,17 +3754,32 @@ class JogoGorilas {
             this.iniciarAudioCtx();
             const ctx = this.audioCtx;
             const t = ctx.currentTime;
+            const saida = this.obterSaidaSfx();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = 'square';
-            osc.frequency.setValueAtTime(780, t);
-            osc.frequency.exponentialRampToValueAtTime(430, t + 0.08);
-            gain.gain.setValueAtTime(0.045, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+            osc.frequency.setValueAtTime(920, t);
+            osc.frequency.exponentialRampToValueAtTime(510, t + 0.095);
+            gain.gain.setValueAtTime(0.042, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
             osc.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(saida);
             osc.start(t);
-            osc.stop(t + 0.09);
+            osc.stop(t + 0.11);
+
+            const ar = ctx.createBufferSource();
+            ar.buffer = this.criarBufferRuido(0.09, 'pink');
+            const arFiltro = ctx.createBiquadFilter();
+            arFiltro.type = 'bandpass';
+            arFiltro.frequency.value = 1650;
+            arFiltro.Q.value = 1.4;
+            const arGain = ctx.createGain();
+            arGain.gain.setValueAtTime(0.012, t);
+            arGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+            ar.connect(arFiltro);
+            arFiltro.connect(arGain);
+            arGain.connect(saida);
+            ar.start(t);
         } catch (_) { /* ignorar */ }
     }
 

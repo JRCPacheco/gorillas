@@ -27,6 +27,7 @@ dom.window.HTMLCanvasElement.prototype.getContext = () => ({
     stroke: () => {},
     moveTo: () => {},
     lineTo: () => {},
+    quadraticCurveTo: () => {},
     closePath: () => {},
     createLinearGradient: () => ({ addColorStop: () => {} }),
     createRadialGradient: () => ({ addColorStop: () => {} }),
