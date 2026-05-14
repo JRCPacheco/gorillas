@@ -7,13 +7,13 @@
     <title>Gorillas</title>
     <!-- Security Meta Tags -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self';">
+        content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self' 'unsafe-inline' https://unpkg.com; connect-src 'self' wss://*.peerjs.com https://*.peerjs.com;">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260513">
 </head>
 
 <body>
@@ -28,6 +28,7 @@
         <div class="modo-selector">
             <button class="btn-modo ativo" id="modo-hxh">Humano × Humano</button>
             <button class="btn-modo" id="modo-hxm">Humano × Máquina</button>
+            <button class="btn-modo" id="modo-rede">Rede Local</button>
         </div>
 
         <div class="cartoes-container">
@@ -53,6 +54,25 @@
                 </div>
                 <h3>Jogador 2</h3>
                 <input type="text" id="jogador2" placeholder="Apelido" maxlength="10">
+            </div>
+        </div>
+
+        <div id="painel-rede" class="escondido" style="text-align: center; margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+            <div id="rede-setup">
+                <p style="margin-bottom: 10px; font-size: 0.9em; color: #aaa;">Jogue com alguém na mesma rede gerando ou inserindo um código.</p>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button id="btn-criar-sala" class="btn-secundario" style="padding: 8px 16px;">Criar Sala</button>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input type="text" id="codigo-sala" placeholder="Código (ex: 1234)" maxlength="6" style="width: 140px; text-align: center;">
+                        <button id="btn-entrar-sala" class="btn-secundario" style="padding: 8px 16px;">Entrar</button>
+                    </div>
+                </div>
+            </div>
+            <div id="rede-status" class="escondido" style="color: #4ade80; font-weight: bold; margin-top: 10px;">
+                Status: Aguardando oponente...
+            </div>
+            <div id="rede-codigo-display" class="escondido" style="margin-top: 10px;">
+                Seu código: <strong style="font-size: 1.2em; letter-spacing: 2px; color: #fff;" id="display-codigo-sala">----</strong>
             </div>
         </div>
 
@@ -140,7 +160,9 @@
         </div>
     </div>
 
-    <script src="jogo.js?v=20260509c"></script>
+    <!-- PeerJS para Multiplayer WebRTC -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="jogo.js?v=20260513"></script>
 </body>
 
 </html>

@@ -12,6 +12,7 @@ class JogoGorilas {
 
         this.inicializarCanvas();
         this.inicializarEstado();
+        this.inicializarRede();
         this.carregarAssets();
         this.configurarEventos();
         this.configurarSkylineMenu();
@@ -93,6 +94,16 @@ class JogoGorilas {
         this.menuCarros = [];
         this.projectile = this.criarEstadoProjetil();
         this.atualizarEscalasFisicas();
+    }
+
+    inicializarRede() {
+        this.network = {
+            peer: null,
+            conn: null,
+            codigoSala: null,
+            conectado: false,
+            isHost: false
+        };
     }
 
     criarEstadoProjetil() {
@@ -327,10 +338,11 @@ class JogoGorilas {
         this.sprites.sol.imagem.onerror = tratarErroImagem;
         this.sprites.lua.imagem.onerror = tratarErroImagem;
 
-        this.sprites.gorila.imagem.src = 'assets/gorila.png';
-        this.sprites.banana.imagem.src = 'assets/banana.png';
-        this.sprites.sol.imagem.src = 'assets/sol.png';
-        this.sprites.lua.imagem.src = 'assets/lua.png';
+        const v = "?v=" + new Date().getTime();
+        this.sprites.gorila.imagem.src = 'assets/gorila.png' + v;
+        this.sprites.banana.imagem.src = 'assets/banana.png' + v;
+        this.sprites.sol.imagem.src = 'assets/sol.png' + v;
+        this.sprites.lua.imagem.src = 'assets/lua.png' + v;
     }
 
     obterConfigGorila() {
@@ -363,7 +375,8 @@ class JogoGorilas {
         const menorLado = Math.min(window.innerWidth, window.innerHeight);
         const maiorLado = Math.max(window.innerWidth, window.innerHeight);
         const paisagem = window.innerWidth >= window.innerHeight;
-        return paisagem && maiorLado >= 900 && menorLado >= 620;
+        // Relaxado para aceitar tablets (iPad, Galaxy Tab, etc) mas continuar bloqueando celulares pequenos
+        return paisagem && maiorLado >= 768 && menorLado >= 450;
     }
 
     atualizarAvisosViewport() {
@@ -389,6 +402,8 @@ class JogoGorilas {
 
         const btnModoHxH = document.getElementById('modo-hxh');
         const btnModoHxM = document.getElementById('modo-hxm');
+        const btnModoRede = document.getElementById('modo-rede');
+
         if (btnModoHxH) btnModoHxH.addEventListener('click', () => {
             this.atualizarAmbiencia('menu');
             this._selecionarModo('hxh');
@@ -397,6 +412,17 @@ class JogoGorilas {
             this.atualizarAmbiencia('menu');
             this._selecionarModo('hxm');
         });
+        if (btnModoRede) btnModoRede.addEventListener('click', () => {
+            this.atualizarAmbiencia('menu');
+            this._selecionarModo('rede');
+        });
+
+        // Eventos de Rede
+        const btnCriarSala = document.getElementById('btn-criar-sala');
+        const btnEntrarSala = document.getElementById('btn-entrar-sala');
+        
+        if (btnCriarSala) btnCriarSala.addEventListener('click', () => this._criarSalaRede());
+        if (btnEntrarSala) btnEntrarSala.addEventListener('click', () => this._entrarSalaRede());
 
         btnIniciar.addEventListener('click', () => {
             this.atualizarAmbiencia('menu');
@@ -584,6 +610,7 @@ class JogoGorilas {
             // Captura rigorosa do limite de pontos como inteiro positivo
             const limitePontos = parseInt(document.getElementById('pontosVencer').value, 10) || 3;
             const modoIA = document.getElementById('modo-hxm').classList.contains('ativo');
+            const modoRede = document.getElementById('modo-rede').classList.contains('ativo');
             const dificuldadeIA = document.getElementById('dificuldade').value || 'medio';
 
             this.jogadores = {
@@ -596,6 +623,7 @@ class JogoGorilas {
             this.game.gravidade = gravidadeInformada > 0 ? gravidadeInformada : 9.8;
             this.game.limitePontos = limitePontos;
             this.game.modoIA = modoIA;
+            this.game.modoRede = modoRede;
             this.game.dificuldadeIA = dificuldadeIA;
             this.game.astroAtingido = false;
             this.game.mostrarTrajetoria = document.getElementById('mostrarTrajetoria')?.checked ?? true;
@@ -632,6 +660,14 @@ class JogoGorilas {
 
             if (!this.loopIniciado) {
                 this.iniciarLoop();
+            }
+            
+            if (this.game.modoRede && this.network.conectado && this.network.isHost) {
+                this.network.conn.send({
+                    tipo: 'start_game',
+                    cidadeData: this.city.predios,
+                    ventoData: this.game.vento
+                });
             }
             
             console.log("Jogo inicializado com sucesso!");
@@ -1964,9 +2000,45 @@ class JogoGorilas {
         document.querySelector('.wind-container')?.style.setProperty('--wind-pulse', `${0.16 + Math.abs(this.game.vento) * 0.03}`);
     }
 
-    iniciarArremesso() {
+    _isMeuTurnoRede() {
+        if (!this.game.modoRede) return true;
+        if (this.network.isHost && this.game.jogadorAtual === 1) return true;
+        if (!this.network.isHost && this.game.jogadorAtual === 2) return true;
+        return false;
+    }
+
+    _iniciarJogoPeloRede(cidadeData, ventoData) {
+        this.iniciarJogo();
+        this.city.predios = cidadeData;
+        this.game.vento = ventoData;
+        this.posicionarGorilas();
+        this.atualizarHUD();
+        this.desenhar();
+    }
+
+    _executarArremessoRemoto(angulo, velocidade) {
+        const inputAngulo = document.getElementById(`angulo${this.game.jogadorAtual}`);
+        const inputVelocidade = document.getElementById(`velocidade${this.game.jogadorAtual}`);
+        if (inputAngulo) inputAngulo.value = angulo;
+        if (inputVelocidade) inputVelocidade.value = velocidade;
+        
+        // Simular os range sliders tambem
+        const rangeAngulo = document.getElementById(`angulo-range${this.game.jogadorAtual}`);
+        const rangeVelocidade = document.getElementById(`velocidade-range${this.game.jogadorAtual}`);
+        if (rangeAngulo) rangeAngulo.value = angulo;
+        if (rangeVelocidade) rangeVelocidade.value = velocidade;
+
+        this.iniciarArremesso(true);
+    }
+
+    iniciarArremesso(fromRemoto = false) {
         if (!this.game.iniciado || this.projectile.ativo || this.animacaoAcerto) {
             return;
+        }
+
+        // Se estivermos em rede e for acionado localmente, mas não é o meu turno
+        if (this.game.modoRede && !fromRemoto && !this._isMeuTurnoRede()) {
+            return; // Ignora o clique
         }
 
         this.rastro = [];
@@ -1977,6 +2049,15 @@ class JogoGorilas {
         
         const velocidade = Math.max(1, Number(inputVelocidade.value) || 0);
         const anguloBase = Math.max(0, Math.min(360, Number(inputAngulo.value) || 0));
+
+        // Envia para o oponente se for o meu turno local
+        if (this.game.modoRede && !fromRemoto && this._isMeuTurnoRede()) {
+            this.network.conn.send({
+                tipo: 'acao_arremesso',
+                angulo: anguloBase,
+                velocidade: velocidade
+            });
+        }
         
         this.jogadores[this.game.jogadorAtual].velocidade = velocidade;
         this.jogadores[this.game.jogadorAtual].angulo = anguloBase;
@@ -2877,14 +2958,177 @@ class JogoGorilas {
 
     _selecionarModo(modo) {
         const ia = modo === 'hxm';
-        document.getElementById('modo-hxh').classList.toggle('ativo', !ia);
+        const rede = modo === 'rede';
+        
+        document.getElementById('modo-hxh').classList.toggle('ativo', modo === 'hxh');
         document.getElementById('modo-hxm').classList.toggle('ativo', ia);
+        document.getElementById('modo-rede').classList.toggle('ativo', rede);
+        
         document.getElementById('campo-dificuldade').classList.toggle('escondido', !ia);
+        document.getElementById('painel-rede').classList.toggle('escondido', !rede);
+        
+        // Bloquear botão de iniciar se for rede (só inicia quando conectar)
+        if (rede) {
+            if (this.network && this.network.conectado) {
+                if (this.network.isHost) {
+                    document.getElementById('iniciar').textContent = "INICIAR DUELO (HOST)";
+                    document.getElementById('iniciar').disabled = false;
+                } else {
+                    document.getElementById('iniciar').textContent = "AGUARDANDO HOST...";
+                    document.getElementById('iniciar').disabled = true;
+                }
+            } else {
+                document.getElementById('iniciar').disabled = true;
+                document.getElementById('iniciar').textContent = "AGUARDANDO CONEXÃO...";
+            }
+        } else {
+            document.getElementById('iniciar').textContent = "INICIAR DUELO";
+            document.getElementById('iniciar').disabled = false;
+        }
+
         const p2card = document.querySelector('.cartao-jogador.p2');
         if (p2card) p2card.classList.toggle('is-cpu', ia);
         const input2 = document.getElementById('jogador2');
-        if (ia) { input2.value = 'CPU'; input2.disabled = true; }
-        else { input2.value = ''; input2.disabled = false; }
+        
+        if (ia) { 
+            input2.value = 'CPU'; 
+            input2.disabled = true; 
+        } else if (rede) {
+            input2.value = 'Oponente'; 
+            input2.disabled = true; // Nome vem da rede depois
+        } else { 
+            input2.value = ''; 
+            input2.disabled = false; 
+        }
+    }
+
+    _criarSalaRede() {
+        if (this.network.peer) {
+            this.network.peer.destroy();
+        }
+        
+        // Gera um código de 4 dígitos
+        const codigo = Math.floor(1000 + Math.random() * 9000).toString();
+        const peerId = "gorillas_intranet_" + codigo;
+        
+        this._atualizarStatusRede("Criando sala...");
+        
+        this.network.peer = new Peer(peerId);
+        
+        this.network.peer.on('open', (id) => {
+            this.network.codigoSala = codigo;
+            this.network.isHost = true;
+            document.getElementById('rede-codigo-display').classList.remove('escondido');
+            document.getElementById('display-codigo-sala').textContent = codigo;
+            this._atualizarStatusRede("Aguardando oponente...");
+        });
+
+        this.network.peer.on('connection', (conn) => {
+            this.network.conn = conn;
+            this._setupConexaoRede(conn);
+        });
+        
+        this.network.peer.on('error', (err) => {
+            console.error(err);
+            this._atualizarStatusRede("Erro: " + err.type, "red");
+        });
+    }
+
+    _entrarSalaRede() {
+        const codigo = document.getElementById('codigo-sala').value.trim();
+        if (!codigo || codigo.length < 4) {
+            alert("Digite um código válido de 4 dígitos.");
+            return;
+        }
+
+        if (this.network.peer) {
+            this.network.peer.destroy();
+        }
+        
+        const hostPeerId = "gorillas_intranet_" + codigo;
+        this._atualizarStatusRede("Conectando...");
+        document.getElementById('rede-codigo-display').classList.add('escondido');
+
+        this.network.peer = new Peer();
+        
+        this.network.peer.on('open', (id) => {
+            this.network.isHost = false;
+            const conn = this.network.peer.connect(hostPeerId);
+            this.network.conn = conn;
+            
+            conn.on('open', () => {
+                this._setupConexaoRede(conn);
+            });
+            
+            conn.on('error', (err) => {
+                this._atualizarStatusRede("Erro na conexão.", "red");
+            });
+        });
+        
+        this.network.peer.on('error', (err) => {
+            console.error(err);
+            this._atualizarStatusRede("Sala não encontrada ou erro.", "red");
+        });
+    }
+
+    _setupConexaoRede(conn) {
+        this.network.conectado = true;
+        
+        const meuNome = document.getElementById('jogador1').value || 'Gorila';
+        
+        // Quando recebe dados do outro lado
+        conn.on('data', (data) => {
+            this._receberMensagemRede(data);
+        });
+
+        conn.on('close', () => {
+            this.network.conectado = false;
+            this._atualizarStatusRede("Conexão perdida.", "red");
+            if (this.game.iniciado) {
+                alert("Oponente desconectou!");
+                this.voltarAoMenu();
+            }
+        });
+
+        // Enviar meu apelido para o outro lado
+        conn.send({ tipo: 'setup', nome: meuNome });
+    }
+    
+    _receberMensagemRede(msg) {
+        if (msg.tipo === 'setup') {
+            const nomeOponente = msg.nome || 'Oponente';
+            document.getElementById('jogador2').value = nomeOponente;
+            this._atualizarStatusRede(`Conectado a: ${nomeOponente}!`, "#4ade80");
+            
+            // Responder com meu nome se eu for o Host
+            if (this.network.isHost) {
+                const meuNome = document.getElementById('jogador1').value || 'Gorila';
+                this.network.conn.send({ tipo: 'setup_ack', nome: meuNome });
+                
+                // Host libera o botão de Iniciar
+                document.getElementById('iniciar').textContent = "INICIAR DUELO (HOST)";
+                document.getElementById('iniciar').disabled = false;
+            }
+        } else if (msg.tipo === 'setup_ack') {
+            const nomeOponente = msg.nome || 'Oponente';
+            document.getElementById('jogador2').value = nomeOponente;
+            this._atualizarStatusRede(`Conectado a: ${nomeOponente}! Aguarde o Host iniciar.`, "#4ade80");
+            document.getElementById('iniciar').textContent = "AGUARDANDO HOST...";
+        } else if (msg.tipo === 'start_game') {
+            // O Host mandou iniciar o jogo, e também enviou a seed da cidade
+            this._iniciarJogoPeloRede(msg.cidadeData, msg.ventoData);
+        } else if (msg.tipo === 'acao_arremesso') {
+            this._executarArremessoRemoto(msg.angulo, msg.velocidade);
+        }
+    }
+
+    _atualizarStatusRede(texto, cor = "#fff") {
+        const div = document.getElementById('rede-status');
+        if (div) {
+            div.classList.remove('escondido');
+            div.textContent = "Status: " + texto;
+            div.style.color = cor;
+        }
     }
 
     _verificarTurnoIA() {
