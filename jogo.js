@@ -98,12 +98,36 @@ class JogoGorilas {
 
     inicializarRede() {
         this.network = {
-            peer: null,
-            conn: null,
+            db: null,
+            salaRef: null,
+            mensagensRef: null,
             codigoSala: null,
             conectado: false,
-            isHost: false
+            isHost: false,
+            listenersDeMensagens: []
         };
+
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyADqIb_61jqIM-IQ53_D6Fj4UhJPscitWg",
+            authDomain: "gorillas-84b59.firebaseapp.com",
+            projectId: "gorillas-84b59",
+            databaseURL: "https://gorillas-84b59-default-rtdb.firebaseio.com",
+            storageBucket: "gorillas-84b59.firebasestorage.app",
+            messagingSenderId: "307565688469",
+            appId: "1:307565688469:web:61a47c840bc7d2abc7d9dc",
+            measurementId: "G-CHSR2LS62W"
+        };
+
+        // Initialize Firebase if not already initialized
+        if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+            this.network.db = firebase.database();
+        } else if (typeof firebase !== 'undefined') {
+            this.network.db = firebase.database();
+        } else {
+            console.error("Firebase SDK não carregado.");
+        }
     }
 
     criarEstadoProjetil() {
@@ -420,7 +444,7 @@ class JogoGorilas {
         // Eventos de Rede
         const btnCriarSala = document.getElementById('btn-criar-sala');
         const btnEntrarSala = document.getElementById('btn-entrar-sala');
-        
+
         if (btnCriarSala) btnCriarSala.addEventListener('click', () => this._criarSalaRede());
         if (btnEntrarSala) btnEntrarSala.addEventListener('click', () => this._entrarSalaRede());
 
@@ -661,15 +685,15 @@ class JogoGorilas {
             if (!this.loopIniciado) {
                 this.iniciarLoop();
             }
-            
+
             if (this.game.modoRede && this.network.conectado && this.network.isHost) {
-                this.network.conn.send({
+                this._enviarMensagemRede({
                     tipo: 'start_game',
                     cidadeData: this.city.predios,
                     ventoData: this.game.vento
                 });
             }
-            
+
             console.log("Jogo inicializado com sucesso!");
         } catch (erro) {
             console.error(erro);
@@ -695,7 +719,7 @@ class JogoGorilas {
             this.game.ultimoTempo = tempoAtual;
 
             this.atualizar(delta);
-            
+
             // Só desenha se o jogo ainda estiver ativo após o atualizar
             // (atualizar pode chamar exibirVitoria que seta game.iniciado = false)
             if (this.game.iniciado) {
@@ -1354,9 +1378,9 @@ class JogoGorilas {
             // Asfalto principal com gradiente para dar profundidade
             const gradAsfalto = ctx.createLinearGradient(0, ruaY, 0, ruaY + ruaH);
             if (isFrente) {
-                gradAsfalto.addColorStop(0,   'rgba(46, 48, 62, 0.97)');
+                gradAsfalto.addColorStop(0, 'rgba(46, 48, 62, 0.97)');
                 gradAsfalto.addColorStop(0.4, 'rgba(34, 36, 50, 0.99)');
-                gradAsfalto.addColorStop(1,   'rgba(18, 20, 32, 1.0)');
+                gradAsfalto.addColorStop(1, 'rgba(18, 20, 32, 1.0)');
             } else {
                 gradAsfalto.addColorStop(0, 'rgba(38, 40, 54, 0.88)');
                 gradAsfalto.addColorStop(1, 'rgba(24, 26, 40, 0.93)');
@@ -1377,9 +1401,9 @@ class JogoGorilas {
 
             // Faixas tracejadas centrais (amarelas)
             const tracoDash = isFrente ? 36 : 26;
-            const tracoGap  = isFrente ? 22 : 17;
-            const tracoH    = Math.max(1.5, ruaH * 0.11);
-            const tracoY    = ruaY + ruaH * 0.44;
+            const tracoGap = isFrente ? 22 : 17;
+            const tracoH = Math.max(1.5, ruaH * 0.11);
+            const tracoY = ruaY + ruaH * 0.44;
             ctx.fillStyle = `rgba(255, 220, 120, ${isFrente ? 0.72 : 0.50})`;
             for (let x = 0; x < largura; x += tracoDash + tracoGap) {
                 ctx.fillRect(x, tracoY, tracoDash, tracoH);
@@ -1387,7 +1411,7 @@ class JogoGorilas {
 
             // Linhas de borda brancas (edge lines)
             const bordaAlpha = isFrente ? 0.34 : 0.22;
-            const bordaH     = Math.max(1, ruaH * 0.07);
+            const bordaH = Math.max(1, ruaH * 0.07);
             ctx.fillStyle = `rgba(210, 216, 240, ${bordaAlpha})`;
             ctx.fillRect(0, ruaY + ruaH * 0.14, largura, bordaH);
             ctx.fillRect(0, ruaY + ruaH * 0.76, largura, bordaH);
@@ -1519,18 +1543,14 @@ class JogoGorilas {
         return {
             tomBase,
             profundidade,
-            frenteTopo: `rgba(${tomBase + 18}, ${tomBase + 20}, ${tomBase + 36}, ${
-                camada === 'distante' ? 0.7 : camada === 'frente' ? 1.0 : 0.88
-            })`,
-            frenteBase: `rgba(${tomBase - 2}, ${tomBase}, ${tomBase + 12}, ${
-                camada === 'distante' ? 0.8 : camada === 'frente' ? 1.0 : 0.94
-            })`,
-            lateral: `rgba(${Math.max(8, tomBase - 14)}, ${Math.max(10, tomBase - 10)}, ${tomBase + 2}, ${
-                camada === 'distante' ? 0.55 : camada === 'frente' ? 1.0 : 0.88
-            })`,
-            topo: `rgba(${tomBase + 24}, ${tomBase + 18}, ${tomBase + 26}, ${
-                camada === 'distante' ? 0.24 : camada === 'frente' ? 0.96 : 0.72
-            })`,
+            frenteTopo: `rgba(${tomBase + 18}, ${tomBase + 20}, ${tomBase + 36}, ${camada === 'distante' ? 0.7 : camada === 'frente' ? 1.0 : 0.88
+                })`,
+            frenteBase: `rgba(${tomBase - 2}, ${tomBase}, ${tomBase + 12}, ${camada === 'distante' ? 0.8 : camada === 'frente' ? 1.0 : 0.94
+                })`,
+            lateral: `rgba(${Math.max(8, tomBase - 14)}, ${Math.max(10, tomBase - 10)}, ${tomBase + 2}, ${camada === 'distante' ? 0.55 : camada === 'frente' ? 1.0 : 0.88
+                })`,
+            topo: `rgba(${tomBase + 24}, ${tomBase + 18}, ${tomBase + 26}, ${camada === 'distante' ? 0.24 : camada === 'frente' ? 0.96 : 0.72
+                })`,
             janelaAcesa: camada === 'distante'
                 ? 'rgba(255, 214, 122, 0.16)'
                 : camada === 'frente'
@@ -1928,10 +1948,15 @@ class JogoGorilas {
             `<span class="placar-nome">${this.jogadores[1].nome}</span><span class="placar-valor">${this.jogadores[1].pontos}</span>`;
         document.getElementById('texto-placar2').innerHTML =
             `<span class="placar-nome">${this.jogadores[2].nome}</span><span class="placar-valor">${this.jogadores[2].pontos}</span>`;
-            
+
         document.getElementById('placar-jogador1').classList.toggle('ativo', this.game.jogadorAtual === 1);
+        document.getElementById('placar-jogador1').classList.toggle('inativo', this.game.jogadorAtual !== 1);
         document.getElementById('placar-jogador2').classList.toggle('ativo', this.game.jogadorAtual === 2);
+        document.getElementById('placar-jogador2').classList.toggle('inativo', this.game.jogadorAtual !== 2);
         
+        document.getElementById('controle-p1').classList.toggle('inativo', this.game.jogadorAtual !== 1);
+        document.getElementById('controle-p2').classList.toggle('inativo', this.game.jogadorAtual !== 2);
+
         document.getElementById('angulo1').disabled = this.game.jogadorAtual !== 1;
         document.getElementById('angulo-range1').disabled = this.game.jogadorAtual !== 1;
         document.getElementById('velocidade1').disabled = this.game.jogadorAtual !== 1;
@@ -1944,6 +1969,9 @@ class JogoGorilas {
         if (this.game.modoIA) {
             document.getElementById('controle-p2').style.visibility = 'hidden';
             document.getElementById('lancar').disabled = this.game.jogadorAtual === 2;
+        } else if (this.game.modoRede) {
+            document.getElementById('controle-p2').style.visibility = '';
+            document.getElementById('lancar').disabled = !this._isMeuTurnoRede();
         } else {
             document.getElementById('controle-p2').style.visibility = '';
             document.getElementById('lancar').disabled = false;
@@ -1984,7 +2012,7 @@ class JogoGorilas {
         // Atualizar Seta de Vento Visual (HUD)
         const seta = document.getElementById('seta-vento');
         const forcaAbsoluta = Math.min(Math.abs(this.game.vento) * 10, 50); // Máximo 50% para cada lado
-        
+
         if (this.game.vento > 0) {
             seta.style.width = `${forcaAbsoluta}%`;
             seta.style.left = '50%';
@@ -2021,7 +2049,7 @@ class JogoGorilas {
         const inputVelocidade = document.getElementById(`velocidade${this.game.jogadorAtual}`);
         if (inputAngulo) inputAngulo.value = angulo;
         if (inputVelocidade) inputVelocidade.value = velocidade;
-        
+
         // Simular os range sliders tambem
         const rangeAngulo = document.getElementById(`angulo-range${this.game.jogadorAtual}`);
         const rangeVelocidade = document.getElementById(`velocidade-range${this.game.jogadorAtual}`);
@@ -2046,22 +2074,22 @@ class JogoGorilas {
 
         const inputAngulo = document.getElementById(`angulo${this.game.jogadorAtual}`);
         const inputVelocidade = document.getElementById(`velocidade${this.game.jogadorAtual}`);
-        
+
         const velocidade = Math.max(1, Number(inputVelocidade.value) || 0);
         const anguloBase = Math.max(0, Math.min(360, Number(inputAngulo.value) || 0));
 
         // Envia para o oponente se for o meu turno local
         if (this.game.modoRede && !fromRemoto && this._isMeuTurnoRede()) {
-            this.network.conn.send({
+            this._enviarMensagemRede({
                 tipo: 'acao_arremesso',
                 angulo: anguloBase,
                 velocidade: velocidade
             });
         }
-        
+
         this.jogadores[this.game.jogadorAtual].velocidade = velocidade;
         this.jogadores[this.game.jogadorAtual].angulo = anguloBase;
-        
+
         const angulo = this.game.jogadorAtual === 1 ? anguloBase : 180 - anguloBase;
         const origem = this.obterOrigemArremesso(this.game.jogadorAtual);
         const anguloRadianos = (angulo * Math.PI) / 180;
@@ -2383,8 +2411,8 @@ class JogoGorilas {
 
             // Verifica se ainda existe chão nos primeiros 3px abaixo dos pés
             const temChao = this.cidadeTemMaterialEm(cx, footY) ||
-                            this.cidadeTemMaterialEm(cx, footY + 1) ||
-                            this.cidadeTemMaterialEm(cx, footY + 2);
+                this.cidadeTemMaterialEm(cx, footY + 1) ||
+                this.cidadeTemMaterialEm(cx, footY + 2);
 
             if (!temChao) {
                 // Procura o próximo pixel sólido abaixo
@@ -2402,7 +2430,16 @@ class JogoGorilas {
         this.projectile = this.criarEstadoProjetil();
         this.efeitoLancamento = null;
         this.game.jogadorAtual = this.game.jogadorAtual === 1 ? 2 : 1;
-        this.sortearVento();
+        
+        if (this.game.modoRede && !this.network.isHost) {
+            // Cliente espera o host enviar o novo vento via rede
+        } else {
+            this.sortearVento();
+            if (this.game.modoRede && this.network.isHost) {
+                this._enviarMensagemRede({ tipo: 'sync_vento', vento: this.game.vento });
+            }
+        }
+        
         this._verificarTurnoIA();
     }
 
@@ -2423,9 +2460,33 @@ class JogoGorilas {
         this.efeitoLancamento = null;
         this.impactosVisuais = [];
         this.crateras = [];
-        this.gerarCidade();
-        this.posicionarGorilas();
-        this.sortearVento();
+
+        if (this.game.modoRede && !this.network.isHost) {
+            if (this.proximaCidadeData) {
+                this.city.predios = this.proximaCidadeData;
+                this.game.vento = this.proximoVentoData;
+                this.proximaCidadeData = null;
+                this.posicionarGorilas();
+                this.atualizarHUD();
+                this.desenhar();
+            } else {
+                this.aguardandoSyncRodada = true;
+            }
+        } else {
+            this.gerarCidade();
+            this.posicionarGorilas();
+            this.sortearVento();
+            
+            if (this.game.modoRede && this.network.isHost) {
+                this._enviarMensagemRede({ 
+                    tipo: 'sync_rodada', 
+                    cidadeData: this.city.predios, 
+                    ventoData: this.game.vento,
+                    jogadorAtual: this.game.jogadorAtual
+                });
+            }
+        }
+        
         this.desenhar();
         this._verificarTurnoIA();
     }
@@ -2443,7 +2504,7 @@ class JogoGorilas {
         this.transicionarTela(document.getElementById('tela-jogo'), document.getElementById('tela-vitoria'));
         document.getElementById('tela-vitoria').style.display = 'flex';
         document.body.classList.remove('menu-ativa');
-        
+
         this.tocarSomVitoria();
         this.atualizarAmbiencia('vitoria');
         document.getElementById('msg-vitoria').textContent = `${vencedor.nome.toUpperCase()} VENCEU!`;
@@ -2481,11 +2542,11 @@ class JogoGorilas {
         const p1 = this.jogadores[1];
         const p2 = this.jogadores[2];
         const textoPlacar = `${p1.nome} ${p1.pontos}  > Score <  ${p2.pontos} ${p2.nome}`;
-        
+
         this.ctx.save();
         this.ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
         this.ctx.fillRect(0, this.alturaTela - 60, this.larguraTela, 45); // Banner estilo rodapé/central
-        
+
         this.ctx.font = '700 18px "Outfit"';
         this.ctx.fillStyle = '#f59e0b';
         this.ctx.textAlign = 'center';
@@ -2638,79 +2699,79 @@ class JogoGorilas {
             .slice()
             .sort((a, b) => (a.profundidade || 0) - (b.profundidade || 0))
             .forEach(nuvem => {
-            const volumeFundo = nuvem.volumeFundo || {};
-            const volumeFrente = nuvem.volumeFrente || {};
-            const distanciaSol = Math.abs(nuvem.x - areaSol.x);
-            const influenciaSol = Math.max(0, 1 - distanciaSol / (this.larguraTela * 0.42))
-                * (cena.astro === 'sol' ? 1 - f * 0.65 : 0.16)
-                * (0.35 + nuvem.brilhoQuente * 0.65);
-            const deformacao = Math.sin(tempo * (0.32 + (nuvem.profundidade || 0) * 0.08) + nuvem.deformacaoFase);
-            const escalaX = (nuvem.escalaBaseX || 1) * (1 + deformacao * (nuvem.deformacaoAmplitudeX || 0));
-            const escalaY = (nuvem.escalaBaseY || 1) * (1 - deformacao * (nuvem.deformacaoAmplitudeY || 0));
-            const opacidade = nuvem.opacidadeBase * (1 - f * 0.38);
-            const sombraAlpha = 0.1 + (nuvem.profundidade || 0) * 0.04 + f * 0.06;
-            const fundoAlpha = 0.18 + (nuvem.profundidade || 0) * 0.08;
-            const brilhoSuperior = 0.72 + influenciaSol * 0.18 - f * 0.18;
-            const meioBranco = 0.68 - f * 0.18;
-            const baseFria = 0.56 - f * 0.12;
+                const volumeFundo = nuvem.volumeFundo || {};
+                const volumeFrente = nuvem.volumeFrente || {};
+                const distanciaSol = Math.abs(nuvem.x - areaSol.x);
+                const influenciaSol = Math.max(0, 1 - distanciaSol / (this.larguraTela * 0.42))
+                    * (cena.astro === 'sol' ? 1 - f * 0.65 : 0.16)
+                    * (0.35 + nuvem.brilhoQuente * 0.65);
+                const deformacao = Math.sin(tempo * (0.32 + (nuvem.profundidade || 0) * 0.08) + nuvem.deformacaoFase);
+                const escalaX = (nuvem.escalaBaseX || 1) * (1 + deformacao * (nuvem.deformacaoAmplitudeX || 0));
+                const escalaY = (nuvem.escalaBaseY || 1) * (1 - deformacao * (nuvem.deformacaoAmplitudeY || 0));
+                const opacidade = nuvem.opacidadeBase * (1 - f * 0.38);
+                const sombraAlpha = 0.1 + (nuvem.profundidade || 0) * 0.04 + f * 0.06;
+                const fundoAlpha = 0.18 + (nuvem.profundidade || 0) * 0.08;
+                const brilhoSuperior = 0.72 + influenciaSol * 0.18 - f * 0.18;
+                const meioBranco = 0.68 - f * 0.18;
+                const baseFria = 0.56 - f * 0.12;
 
-            this.ctx.save();
-            this.ctx.globalAlpha = fundoAlpha * opacidade;
-            this.desenharFormaNuvem(this.ctx, nuvem, {
-                offsetX: volumeFundo.offsetX || -10,
-                offsetY: volumeFundo.offsetY || 8,
-                escalaX: (volumeFundo.escalaX || 0.8) * escalaX,
-                escalaY: (volumeFundo.escalaY || 0.82) * escalaY
+                this.ctx.save();
+                this.ctx.globalAlpha = fundoAlpha * opacidade;
+                this.desenharFormaNuvem(this.ctx, nuvem, {
+                    offsetX: volumeFundo.offsetX || -10,
+                    offsetY: volumeFundo.offsetY || 8,
+                    escalaX: (volumeFundo.escalaX || 0.8) * escalaX,
+                    escalaY: (volumeFundo.escalaY || 0.82) * escalaY
+                });
+                this.ctx.fillStyle = `rgba(${180 - f * 34}, ${204 - f * 30}, ${236 - f * 18}, 0.92)`;
+                this.ctx.fill();
+                this.ctx.restore();
+
+                const grad = this.ctx.createLinearGradient(0, nuvem.y - nuvem.alturaTotal * 0.55, 0, nuvem.y + nuvem.alturaTotal * 0.5);
+                grad.addColorStop(0, `rgba(${255 - f * 28}, ${248 - f * 10}, ${236 + influenciaSol * 16}, ${brilhoSuperior})`);
+                grad.addColorStop(0.52, `rgba(${236 - f * 22}, ${242 - f * 16}, ${252 - f * 10}, ${meioBranco})`);
+                grad.addColorStop(1, `rgba(${188 - f * 20}, ${208 - f * 18}, ${238 - f * 10}, ${baseFria})`);
+
+                this.desenharFormaNuvem(this.ctx, nuvem, {
+                    escalaX,
+                    escalaY
+                });
+                this.ctx.fillStyle = grad;
+                this.ctx.shadowColor = `rgba(255, 220, 170, ${0.06 + influenciaSol * 0.12})`;
+                this.ctx.shadowBlur = 8 + (nuvem.profundidade || 0) * 2;
+                this.ctx.fill();
+
+                this.desenharFormaNuvem(this.ctx, nuvem, {
+                    offsetX: volumeFrente.offsetX || nuvem.larguraTotal * 0.04,
+                    offsetY: volumeFrente.offsetY || -nuvem.alturaTotal * 0.04,
+                    escalaX: escalaX * (volumeFrente.escalaX || 0.64),
+                    escalaY: escalaY * (volumeFrente.escalaY || 0.58)
+                });
+                const brilhoFrontal = this.ctx.createLinearGradient(
+                    nuvem.x,
+                    nuvem.y - nuvem.alturaTotal * 0.36,
+                    nuvem.x + nuvem.larguraTotal * 0.16,
+                    nuvem.y + nuvem.alturaTotal * 0.12
+                );
+                brilhoFrontal.addColorStop(0, `rgba(255, 246, 232, ${volumeFrente.alpha + influenciaSol * 0.12})`);
+                brilhoFrontal.addColorStop(1, 'rgba(255,255,255,0)');
+                this.ctx.fillStyle = brilhoFrontal;
+                this.ctx.shadowBlur = 0;
+                this.ctx.fill();
+
+                this.desenharFormaNuvem(this.ctx, nuvem, {
+                    offsetX: -nuvem.larguraTotal * (0.04 + (nuvem.profundidade || 0) * 0.01),
+                    offsetY: nuvem.alturaTotal * (0.02 + (nuvem.profundidade || 0) * 0.008),
+                    escalaX: escalaX * 0.9,
+                    escalaY: escalaY * 0.86
+                });
+                const sombra = this.ctx.createLinearGradient(0, nuvem.y, 0, nuvem.y + nuvem.alturaTotal * 0.48);
+                sombra.addColorStop(0, 'rgba(255,255,255,0)');
+                sombra.addColorStop(1, `rgba(${150 - f * 18}, ${176 - f * 20}, ${216 - f * 12}, ${sombraAlpha})`);
+                this.ctx.fillStyle = sombra;
+                this.ctx.shadowBlur = 0;
+                this.ctx.fill();
             });
-            this.ctx.fillStyle = `rgba(${180 - f * 34}, ${204 - f * 30}, ${236 - f * 18}, 0.92)`;
-            this.ctx.fill();
-            this.ctx.restore();
-
-            const grad = this.ctx.createLinearGradient(0, nuvem.y - nuvem.alturaTotal * 0.55, 0, nuvem.y + nuvem.alturaTotal * 0.5);
-            grad.addColorStop(0, `rgba(${255 - f * 28}, ${248 - f * 10}, ${236 + influenciaSol * 16}, ${brilhoSuperior})`);
-            grad.addColorStop(0.52, `rgba(${236 - f * 22}, ${242 - f * 16}, ${252 - f * 10}, ${meioBranco})`);
-            grad.addColorStop(1, `rgba(${188 - f * 20}, ${208 - f * 18}, ${238 - f * 10}, ${baseFria})`);
-
-            this.desenharFormaNuvem(this.ctx, nuvem, {
-                escalaX,
-                escalaY
-            });
-            this.ctx.fillStyle = grad;
-            this.ctx.shadowColor = `rgba(255, 220, 170, ${0.06 + influenciaSol * 0.12})`;
-            this.ctx.shadowBlur = 8 + (nuvem.profundidade || 0) * 2;
-            this.ctx.fill();
-
-            this.desenharFormaNuvem(this.ctx, nuvem, {
-                offsetX: volumeFrente.offsetX || nuvem.larguraTotal * 0.04,
-                offsetY: volumeFrente.offsetY || -nuvem.alturaTotal * 0.04,
-                escalaX: escalaX * (volumeFrente.escalaX || 0.64),
-                escalaY: escalaY * (volumeFrente.escalaY || 0.58)
-            });
-            const brilhoFrontal = this.ctx.createLinearGradient(
-                nuvem.x,
-                nuvem.y - nuvem.alturaTotal * 0.36,
-                nuvem.x + nuvem.larguraTotal * 0.16,
-                nuvem.y + nuvem.alturaTotal * 0.12
-            );
-            brilhoFrontal.addColorStop(0, `rgba(255, 246, 232, ${volumeFrente.alpha + influenciaSol * 0.12})`);
-            brilhoFrontal.addColorStop(1, 'rgba(255,255,255,0)');
-            this.ctx.fillStyle = brilhoFrontal;
-            this.ctx.shadowBlur = 0;
-            this.ctx.fill();
-
-            this.desenharFormaNuvem(this.ctx, nuvem, {
-                offsetX: -nuvem.larguraTotal * (0.04 + (nuvem.profundidade || 0) * 0.01),
-                offsetY: nuvem.alturaTotal * (0.02 + (nuvem.profundidade || 0) * 0.008),
-                escalaX: escalaX * 0.9,
-                escalaY: escalaY * 0.86
-            });
-            const sombra = this.ctx.createLinearGradient(0, nuvem.y, 0, nuvem.y + nuvem.alturaTotal * 0.48);
-            sombra.addColorStop(0, 'rgba(255,255,255,0)');
-            sombra.addColorStop(1, `rgba(${150 - f * 18}, ${176 - f * 20}, ${216 - f * 12}, ${sombraAlpha})`);
-            this.ctx.fillStyle = sombra;
-            this.ctx.shadowBlur = 0;
-            this.ctx.fill();
-        });
         this.ctx.restore();
     }
 
@@ -2959,14 +3020,14 @@ class JogoGorilas {
     _selecionarModo(modo) {
         const ia = modo === 'hxm';
         const rede = modo === 'rede';
-        
+
         document.getElementById('modo-hxh').classList.toggle('ativo', modo === 'hxh');
         document.getElementById('modo-hxm').classList.toggle('ativo', ia);
         document.getElementById('modo-rede').classList.toggle('ativo', rede);
-        
+
         document.getElementById('campo-dificuldade').classList.toggle('escondido', !ia);
         document.getElementById('painel-rede').classList.toggle('escondido', !rede);
-        
+
         // Bloquear botão de iniciar se for rede (só inicia quando conectar)
         if (rede) {
             if (this.network && this.network.conectado) {
@@ -2989,49 +3050,93 @@ class JogoGorilas {
         const p2card = document.querySelector('.cartao-jogador.p2');
         if (p2card) p2card.classList.toggle('is-cpu', ia);
         const input2 = document.getElementById('jogador2');
-        
-        if (ia) { 
-            input2.value = 'CPU'; 
-            input2.disabled = true; 
+
+        if (ia) {
+            input2.value = 'CPU';
+            input2.disabled = true;
         } else if (rede) {
-            input2.value = 'Oponente'; 
+            input2.value = 'Oponente';
             input2.disabled = true; // Nome vem da rede depois
-        } else { 
-            input2.value = ''; 
-            input2.disabled = false; 
+        } else {
+            input2.value = '';
+            input2.disabled = false;
         }
     }
 
-    _criarSalaRede() {
+    _limparConexaoAntiga() {
         if (this.network.peer) {
             this.network.peer.destroy();
+            this.network.peer = null;
         }
+        if (this.network.mensagensRef) {
+            this.network.mensagensRef.off();
+            this.network.mensagensRef = null;
+        }
+        this.network.conectado = false;
+        this.network.conn = null;
+    }
+
+    _criarSalaRede() {
+        this._limparConexaoAntiga();
+        
+        const modo = document.getElementById('tipo-conexao').value;
+        this.network.modo = modo;
         
         // Gera um código de 4 dígitos
         const codigo = Math.floor(1000 + Math.random() * 9000).toString();
-        const peerId = "gorillas_intranet_" + codigo;
+        this.network.codigoSala = codigo;
+        this.network.isHost = true;
+        this.network.meuId = 'host';
         
         this._atualizarStatusRede("Criando sala...");
-        
-        this.network.peer = new Peer(peerId);
-        
-        this.network.peer.on('open', (id) => {
-            this.network.codigoSala = codigo;
-            this.network.isHost = true;
-            document.getElementById('rede-codigo-display').classList.remove('escondido');
-            document.getElementById('display-codigo-sala').textContent = codigo;
-            this._atualizarStatusRede("Aguardando oponente...");
-        });
 
-        this.network.peer.on('connection', (conn) => {
-            this.network.conn = conn;
-            this._setupConexaoRede(conn);
-        });
-        
-        this.network.peer.on('error', (err) => {
-            console.error(err);
-            this._atualizarStatusRede("Erro: " + err.type, "red");
-        });
+        if (modo === 'peerjs') {
+            const peerId = "gorillas_intranet_" + codigo;
+            this.network.peer = new Peer(peerId);
+            
+            this.network.peer.on('open', (id) => {
+                document.getElementById('rede-codigo-display').classList.remove('escondido');
+                document.getElementById('display-codigo-sala').textContent = codigo;
+                this._atualizarStatusRede("Aguardando oponente (P2P)...");
+            });
+
+            this.network.peer.on('connection', (conn) => {
+                this.network.conn = conn;
+                this._setupConexaoRede(conn);
+            });
+            
+            this.network.peer.on('error', (err) => {
+                console.error(err);
+                this._atualizarStatusRede("Erro P2P: " + err.type, "red");
+            });
+        } else if (modo === 'firebase') {
+            if (!this.network.db) {
+                this._atualizarStatusRede("Erro: Firebase não carregado.", "red");
+                return;
+            }
+            this.network.salaRef = this.network.db.ref('salas/' + codigo);
+            this.network.mensagensRef = this.network.db.ref('salas/' + codigo + '/mensagens');
+            
+            // Recria a sala
+            this.network.salaRef.set({ criadoEm: Date.now() }).then(() => {
+                document.getElementById('rede-codigo-display').classList.remove('escondido');
+                document.getElementById('display-codigo-sala').textContent = codigo;
+                this._atualizarStatusRede("Aguardando oponente (Firebase)...");
+                
+                this.network.mensagensRef.on('child_added', (snapshot) => {
+                    const msg = snapshot.val();
+                    if (msg.remetente !== this.network.meuId) {
+                        if (!this.network.conectado) {
+                            this._setupConexaoRede(null); // Host conecta ao receber a primeira msg
+                        }
+                        this._receberMensagemRede(msg);
+                    }
+                });
+            }).catch(err => {
+                console.error(err);
+                this._atualizarStatusRede("Erro no Firebase.", "red");
+            });
+        }
     }
 
     _entrarSalaRede() {
@@ -3041,34 +3146,61 @@ class JogoGorilas {
             return;
         }
 
-        if (this.network.peer) {
-            this.network.peer.destroy();
-        }
+        this._limparConexaoAntiga();
         
-        const hostPeerId = "gorillas_intranet_" + codigo;
+        const modo = document.getElementById('tipo-conexao').value;
+        this.network.modo = modo;
+        this.network.codigoSala = codigo;
+        this.network.isHost = false;
+        this.network.meuId = 'client';
+        
         this._atualizarStatusRede("Conectando...");
         document.getElementById('rede-codigo-display').classList.add('escondido');
 
-        this.network.peer = new Peer();
-        
-        this.network.peer.on('open', (id) => {
-            this.network.isHost = false;
-            const conn = this.network.peer.connect(hostPeerId);
-            this.network.conn = conn;
+        if (modo === 'peerjs') {
+            const hostPeerId = "gorillas_intranet_" + codigo;
+            this.network.peer = new Peer();
             
-            conn.on('open', () => {
-                this._setupConexaoRede(conn);
+            this.network.peer.on('open', (id) => {
+                const conn = this.network.peer.connect(hostPeerId);
+                this.network.conn = conn;
+                
+                conn.on('open', () => {
+                    this._setupConexaoRede(conn);
+                });
+                
+                conn.on('error', (err) => {
+                    this._atualizarStatusRede("Erro na conexão P2P.", "red");
+                });
             });
             
-            conn.on('error', (err) => {
-                this._atualizarStatusRede("Erro na conexão.", "red");
+            this.network.peer.on('error', (err) => {
+                console.error(err);
+                this._atualizarStatusRede("Sala não encontrada (P2P).", "red");
             });
-        });
-        
-        this.network.peer.on('error', (err) => {
-            console.error(err);
-            this._atualizarStatusRede("Sala não encontrada ou erro.", "red");
-        });
+        } else if (modo === 'firebase') {
+            if (!this.network.db) return;
+            
+            this.network.salaRef = this.network.db.ref('salas/' + codigo);
+            this.network.salaRef.once('value').then(snapshot => {
+                if (snapshot.exists()) {
+                    this.network.mensagensRef = this.network.db.ref('salas/' + codigo + '/mensagens');
+                    
+                    this.network.mensagensRef.on('child_added', (snapshot) => {
+                        const msg = snapshot.val();
+                        if (msg.remetente !== this.network.meuId) {
+                            this._receberMensagemRede(msg);
+                        }
+                    });
+                    
+                    this._setupConexaoRede(null); // Cliente se conecta
+                } else {
+                    this._atualizarStatusRede("Sala não encontrada (Firebase).", "red");
+                }
+            }).catch(err => {
+                this._atualizarStatusRede("Erro de leitura.", "red");
+            });
+        }
     }
 
     _setupConexaoRede(conn) {
@@ -3076,24 +3208,37 @@ class JogoGorilas {
         
         const meuNome = document.getElementById('jogador1').value || 'Gorila';
         
-        // Quando recebe dados do outro lado
-        conn.on('data', (data) => {
-            this._receberMensagemRede(data);
-        });
+        if (this.network.modo === 'peerjs' && conn) {
+            conn.on('data', (data) => {
+                this._receberMensagemRede(data);
+            });
 
-        conn.on('close', () => {
-            this.network.conectado = false;
-            this._atualizarStatusRede("Conexão perdida.", "red");
-            if (this.game.iniciado) {
-                alert("Oponente desconectou!");
-                this.voltarAoMenu();
-            }
-        });
-
-        // Enviar meu apelido para o outro lado
-        conn.send({ tipo: 'setup', nome: meuNome });
+            conn.on('close', () => {
+                this.network.conectado = false;
+                this._atualizarStatusRede("Conexão P2P perdida.", "red");
+                if (this.game.iniciado) {
+                    alert("Oponente desconectou!");
+                    this.voltarAoMenu();
+                }
+            });
+        }
+        
+        // Enviar meu apelido para o outro lado usando o Adapter
+        this._enviarMensagemRede({ tipo: 'setup', nome: meuNome });
     }
     
+    _enviarMensagemRede(msg) {
+        if (!this.network.conectado) return;
+        
+        if (this.network.modo === 'peerjs' && this.network.conn) {
+            this.network.conn.send(msg);
+        } else if (this.network.modo === 'firebase' && this.network.mensagensRef) {
+            msg.remetente = this.network.meuId;
+            msg.timestamp = Date.now();
+            this.network.mensagensRef.push(msg);
+        }
+    }
+
     _receberMensagemRede(msg) {
         if (msg.tipo === 'setup') {
             const nomeOponente = msg.nome || 'Oponente';
@@ -3103,7 +3248,7 @@ class JogoGorilas {
             // Responder com meu nome se eu for o Host
             if (this.network.isHost) {
                 const meuNome = document.getElementById('jogador1').value || 'Gorila';
-                this.network.conn.send({ tipo: 'setup_ack', nome: meuNome });
+                this._enviarMensagemRede({ tipo: 'setup_ack', nome: meuNome });
                 
                 // Host libera o botão de Iniciar
                 document.getElementById('iniciar').textContent = "INICIAR DUELO (HOST)";
@@ -3112,13 +3257,30 @@ class JogoGorilas {
         } else if (msg.tipo === 'setup_ack') {
             const nomeOponente = msg.nome || 'Oponente';
             document.getElementById('jogador2').value = nomeOponente;
-            this._atualizarStatusRede(`Conectado a: ${nomeOponente}! Aguarde o Host iniciar.`, "#4ade80");
+            this._atualizarStatusRede(`Conectado a: ${nomeOponente}! Aguarde o Host.`, "#4ade80");
             document.getElementById('iniciar').textContent = "AGUARDANDO HOST...";
         } else if (msg.tipo === 'start_game') {
             // O Host mandou iniciar o jogo, e também enviou a seed da cidade
             this._iniciarJogoPeloRede(msg.cidadeData, msg.ventoData);
         } else if (msg.tipo === 'acao_arremesso') {
             this._executarArremessoRemoto(msg.angulo, msg.velocidade);
+        } else if (msg.tipo === 'sync_vento') {
+            this.game.vento = msg.vento;
+            this.atualizarHUD();
+        } else if (msg.tipo === 'sync_rodada') {
+            if (this.aguardandoSyncRodada) {
+                this.game.jogadorAtual = msg.jogadorAtual;
+                this.city.predios = msg.cidadeData;
+                this.game.vento = msg.ventoData;
+                this.posicionarGorilas();
+                this.atualizarHUD();
+                this.desenhar();
+                this.aguardandoSyncRodada = false;
+            } else {
+                this.game.jogadorAtual = msg.jogadorAtual;
+                this.proximaCidadeData = msg.cidadeData;
+                this.proximoVentoData = msg.ventoData;
+            }
         }
     }
 

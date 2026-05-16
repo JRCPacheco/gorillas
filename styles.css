@@ -356,6 +356,13 @@ body:not(.menu-ativa) .btn-voltar-site {
     transform: translateY(-2px);
 }
 
+.placar.inativo, .painel-controle.inativo {
+    opacity: 0.35;
+    pointer-events: none;
+    filter: grayscale(80%);
+    transition: all 0.4s ease;
+}
+
 .pontuacao {
     font-weight: 700;
     text-transform: uppercase;
@@ -576,9 +583,17 @@ body:not(.menu-ativa) .btn-voltar-site {
     animation: launchPulse 1.35s ease-in-out infinite;
 }
 
-#lancar:hover {
+#lancar:hover:not(:disabled) {
     filter: brightness(1.08);
     transform: translateY(-2px) scale(1.01);
+}
+
+#lancar:disabled {
+    background: #475569;
+    color: #94a3b8;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
 }
 
 /* --- INDICADOR DE VENTO --- */

@@ -7,13 +7,15 @@
     <title>Gorillas</title>
     <!-- Security Meta Tags -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self' 'unsafe-inline' https://unpkg.com; connect-src 'self' wss://*.peerjs.com https://*.peerjs.com;">
+        content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self' 'unsafe-inline' https://unpkg.com https://www.gstatic.com https://*.firebaseio.com; connect-src 'self' wss://*.peerjs.com https://*.peerjs.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self' https://*.firebaseio.com;">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=20260513">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Outfit:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css?v=20260516">
 </head>
 
 <body>
@@ -28,7 +30,7 @@
         <div class="modo-selector">
             <button class="btn-modo ativo" id="modo-hxh">Humano × Humano</button>
             <button class="btn-modo" id="modo-hxm">Humano × Máquina</button>
-            <button class="btn-modo" id="modo-rede">Rede Local</button>
+            <button class="btn-modo" id="modo-rede">Multiplayer</button>
         </div>
 
         <div class="cartoes-container">
@@ -57,13 +59,22 @@
             </div>
         </div>
 
-        <div id="painel-rede" class="escondido" style="text-align: center; margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+        <div id="painel-rede" class="escondido"
+            style="text-align: center; margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
             <div id="rede-setup">
-                <p style="margin-bottom: 10px; font-size: 0.9em; color: #aaa;">Jogue com alguém na mesma rede gerando ou inserindo um código.</p>
+                <div style="margin-bottom: 12px;">
+                    <label style="color: #fff; font-size: 0.9em; margin-right: 10px;">Tipo de Conexão:</label>
+                    <select id="tipo-conexao" style="padding: 5px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px;">
+                        <option value="firebase">Internet (Firebase)</option>
+                        <option value="peerjs">Rede Local (P2P)</option>
+                    </select>
+                </div>
+                <p style="margin-bottom: 10px; font-size: 0.9em; color: #aaa;">Jogue com alguém gerando ou inserindo um código.</p>
                 <div style="display: flex; gap: 10px; justify-content: center;">
                     <button id="btn-criar-sala" class="btn-secundario" style="padding: 8px 16px;">Criar Sala</button>
                     <div style="display: flex; align-items: center; gap: 5px;">
-                        <input type="text" id="codigo-sala" placeholder="Código (ex: 1234)" maxlength="6" style="width: 140px; text-align: center;">
+                        <input type="text" id="codigo-sala" placeholder="Código (ex: 1234)" maxlength="6"
+                            style="width: 140px; text-align: center;">
                         <button id="btn-entrar-sala" class="btn-secundario" style="padding: 8px 16px;">Entrar</button>
                     </div>
                 </div>
@@ -72,12 +83,14 @@
                 Status: Aguardando oponente...
             </div>
             <div id="rede-codigo-display" class="escondido" style="margin-top: 10px;">
-                Seu código: <strong style="font-size: 1.2em; letter-spacing: 2px; color: #fff;" id="display-codigo-sala">----</strong>
+                Seu código: <strong style="font-size: 1.2em; letter-spacing: 2px; color: #fff;"
+                    id="display-codigo-sala">----</strong>
             </div>
         </div>
 
         <p class="instrucao-experiencia">Experiência pensada para desktop e tablet na horizontal</p>
-        <p id="aviso-viewport" class="aviso-viewport escondido">Abra em uma tela maior ou gire o tablet para jogar com o visual completo.</p>
+        <p id="aviso-viewport" class="aviso-viewport escondido">Abra em uma tela maior ou gire o tablet para jogar com o
+            visual completo.</p>
 
         <div class="config-setup">
             <div class="campo-config">
@@ -105,14 +118,17 @@
     </div>
 
     <div id="tela-jogo" class="tela escondido">
-        <button id="btn-voltar-menu-jogo" class="btn-voltar-landing btn-voltar-menu-jogo" type="button">Voltar ao menu</button>
-        <div id="aviso-jogo-viewport" class="aviso-jogo-viewport escondido">Esta versão foi otimizada para desktop e tablet em modo paisagem.</div>
+        <button id="btn-voltar-menu-jogo" class="btn-voltar-landing btn-voltar-menu-jogo" type="button">Voltar ao
+            menu</button>
+        <div id="aviso-jogo-viewport" class="aviso-jogo-viewport escondido">Esta versão foi otimizada para desktop e
+            tablet em modo paisagem.</div>
         <div class="info-jogo">
             <div id="placar-jogador1" class="placar">
                 <div class="placar-etiqueta">Lado Esquerdo</div>
                 <div class="pontuacao" id="texto-placar1">Jogador 1: 0</div>
                 <div class="painel-controle" id="controle-p1">
-                    <label class="label-angulo"><span>Ângulo:</span><input type="number" id="angulo1" min="0" max="360" value="45"></label>
+                    <label class="label-angulo"><span>Ângulo:</span><input type="number" id="angulo1" min="0" max="360"
+                            value="45"></label>
                     <input type="range" id="angulo-range1" min="0" max="360" value="45">
                     <label class="label-velocidade"><span>Vel:</span>
                         <input type="number" id="velocidade1" min="1" max="100" value="50">
@@ -135,7 +151,8 @@
                 <div class="placar-etiqueta">Lado Direito</div>
                 <div class="pontuacao" id="texto-placar2">Jogador 2: 0</div>
                 <div class="painel-controle" id="controle-p2">
-                    <label class="label-angulo"><span>Ângulo:</span><input type="number" id="angulo2" min="0" max="360" value="45"></label>
+                    <label class="label-angulo"><span>Ângulo:</span><input type="number" id="angulo2" min="0" max="360"
+                            value="45"></label>
                     <input type="range" id="angulo-range2" min="0" max="360" value="45">
                     <label class="label-velocidade"><span>Vel:</span>
                         <input type="number" id="velocidade2" min="1" max="100" value="50">
@@ -160,9 +177,13 @@
         </div>
     </div>
 
-    <!-- PeerJS para Multiplayer WebRTC -->
+    <!-- PeerJS para Multiplayer WebRTC (Rede Local) -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="jogo.js?v=20260513"></script>
+
+    <!-- Firebase SDK (Compat) para Multiplayer via Internet -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="jogo.js?v=20260516_2"></script>
 </body>
 
 </html>
